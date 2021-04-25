@@ -28,7 +28,7 @@ use camera_control::CameraController;
 const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
 const VOXEL_HALFWIDTH: f32 = 1.0;  // Size of a voxel (halfwidth)
 const DT: f32 = 1.0 / 30.0;
-const WORLD_DIMS: (usize, usize, usize) = (4,3,4); // The number of chunks that you want to load in 3D space
+const WORLD_DIMS: (usize, usize, usize) = (8,5,8); // The number of chunks that you want to load in 3D space
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -159,6 +159,7 @@ struct State {
     voxel_buffers: Vec<wgpu::Buffer>, // Wgpu buffer vector containing buffers for each individual type of voxel (i.e grass, ore, etc.)
     depth_texture: texture::Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
+    instance_data : Vec<Vec<InstanceRaw>> 
 }
 
 impl State {
@@ -417,6 +418,7 @@ impl State {
             voxel_buffers,
             depth_texture,
             chunks,
+            instance_data
         }
     }
 
@@ -450,25 +452,12 @@ impl State {
         //       In the future, we could just update data on the current chunk that the player is standing every frame, while we don't worry
         //       about chunks that are further away
                 // Individual data arrays that hold data about each material 
-        let mut instance_data : Vec<Vec<InstanceRaw>> = Vec::new();
-        for _ in 0..self.voxel_model.materials.len() {
-            instance_data.push(Vec::new());
-        }
-
-        for i in 0..self.voxels.len(){
-            match self.voxels[i].material {
-                Material::Grass => instance_data[0].push(self.voxels[i].to_raw()),
-                Material::Dirt => instance_data[1].push(self.voxels[i].to_raw()),
-                Material::Iron => instance_data[2].push(self.voxels[i].to_raw()),
-            }
-        }
-
 
         
         // Add buffers to the queue
-        for i in 0..instance_data.len(){
+        for i in 0..self.instance_data.len(){
             self.queue
-            .write_buffer(&self.voxel_buffers[i], 0, bytemuck::cast_slice(&instance_data[i]));
+            .write_buffer(&self.voxel_buffers[i], 0, bytemuck::cast_slice(&self.instance_data[i]));
         }
 
 
@@ -517,11 +506,11 @@ impl State {
 
             // Render each voxel buffer, passing information about the material that we're using (the last argument in the function call)
             // Materials info is stored in  "cube.mtl"
-            for i in 0..instance_data.len(){
+            for i in 0..self.instance_data.len(){
                 render_pass.set_vertex_buffer(1, self.voxel_buffers[i].slice(..));
                 render_pass.draw_voxels(
                     &self.voxel_model,
-                    0..instance_data[i].len() as u32,
+                    0..self.instance_data[i].len() as u32,
                     &self.uniform_bind_group,
                     i,
                 );
