@@ -26,9 +26,9 @@ use camera_control::CameraController;
 
 
 const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
-const VOXEL_HALFWIDTH: f32 = 0.5;  // Size of a voxel (halfwidth)
+const VOXEL_HALFWIDTH: f32 = 1.0;  // Size of a voxel (halfwidth)
 const DT: f32 = 1.0 / 30.0;
-const WORLD_DIMS: (usize, usize, usize) = (5,3,5); // The number of chunks that you want to load in 3D space
+const WORLD_DIMS: (usize, usize, usize) = (4,3,4); // The number of chunks that you want to load in 3D space
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -279,45 +279,43 @@ impl State {
             voxels.append( &mut voxels_from_chunk(&chunks[i]));
         }
 
+        let res_dir = std::path::Path::new(env!("OUT_DIR")).join("content");
+        // Create voxel model struct. This is a simple cube that's used as base for every voxel 
+        let voxel_model = model::Model::load(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            res_dir.join("cube.obj"),
+        )
+        .unwrap();
+
+
         // Individual data arrays that hold data about each material 
-        let mut grass_data: Vec<InstanceRaw> = Vec::new();
-        let mut ore_data: Vec<InstanceRaw> = Vec::new();
-        let mut dirt_data: Vec<InstanceRaw> = Vec::new();
-        for i in 0..voxels.len() {
+        let mut instance_data : Vec<Vec<InstanceRaw>> = Vec::new();
+        for _ in 0..voxel_model.materials.len() {
+            instance_data.push(Vec::new());
+        }
+
+        for i in 0..voxels.len(){
             match voxels[i].material {
-                Material::Grass => grass_data.push(voxels[i].to_raw()),
-                Material::Dirt => dirt_data.push(voxels[i].to_raw()),
-                Material::Iron => ore_data.push(voxels[i].to_raw()),
+                Material::Grass => instance_data[0].push(voxels[i].to_raw()),
+                Material::Dirt => instance_data[1].push(voxels[i].to_raw()),
+                Material::Iron => instance_data[2].push(voxels[i].to_raw()),
             }
         }
-         
 
         // Push data into unique buffers so we know what material to use
         // TODO: This might not be super necessary, because the raw data is just a bunch of positions
         let mut voxel_buffers: Vec<wgpu::Buffer> = Vec::new();
-        voxel_buffers.push(
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Dirt Buffer"),
-                contents: bytemuck::cast_slice(&dirt_data),
-                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
-            }),
-        );
-
-        voxel_buffers.push(
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Grass Buffer"),
-                contents: bytemuck::cast_slice(&grass_data),
-                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
-            }),
-        );
-        voxel_buffers.push(
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Ore Buffer"),
-                contents: bytemuck::cast_slice(&ore_data),
-                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
-            }),
-        );
-
+        for i in 0..instance_data.len() {
+            voxel_buffers.push(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some( &i.to_string()),
+                    contents: bytemuck::cast_slice(&instance_data[i]),
+                    usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+                }),
+            );
+        }   
 
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -343,16 +341,7 @@ impl State {
             label: Some("uniform_bind_group"),
         });
 
-        let res_dir = std::path::Path::new(env!("OUT_DIR")).join("content");
-
-        // Create voxel model struct. This is a simple cube that's used as base for every voxel 
-        let voxel_model = model::Model::load(
-            &device,
-            &queue,
-            &texture_bind_group_layout,
-            res_dir.join("cube.obj"),
-        )
-        .unwrap();
+        
 
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
@@ -409,6 +398,7 @@ impl State {
             },
         });
 
+        
         Self {
             surface,
             device,
@@ -459,24 +449,29 @@ impl State {
         //       The only thing that worries me is how we're going to handle updating voxels in a single chunk efficiently
         //       In the future, we could just update data on the current chunk that the player is standing every frame, while we don't worry
         //       about chunks that are further away
-        let mut grass_data: Vec<InstanceRaw> = Vec::new();
-        let mut ore_data: Vec<InstanceRaw> = Vec::new();
-        let mut dirt_data: Vec<InstanceRaw> = Vec::new();
-        for i in 0..self.voxels.len() {
+                // Individual data arrays that hold data about each material 
+        let mut instance_data : Vec<Vec<InstanceRaw>> = Vec::new();
+        for _ in 0..self.voxel_model.materials.len() {
+            instance_data.push(Vec::new());
+        }
+
+        for i in 0..self.voxels.len(){
             match self.voxels[i].material {
-                Material::Grass => grass_data.push(self.voxels[i].to_raw()),
-                Material::Dirt => dirt_data.push(self.voxels[i].to_raw()),
-                Material::Iron => ore_data.push(self.voxels[i].to_raw()),
+                Material::Grass => instance_data[0].push(self.voxels[i].to_raw()),
+                Material::Dirt => instance_data[1].push(self.voxels[i].to_raw()),
+                Material::Iron => instance_data[2].push(self.voxels[i].to_raw()),
             }
         }
 
+
+        
         // Add buffers to the queue
-        self.queue
-            .write_buffer(&self.voxel_buffers[0], 0, bytemuck::cast_slice(&dirt_data));
-        self.queue
-            .write_buffer(&self.voxel_buffers[1], 0, bytemuck::cast_slice(&grass_data));
-        self.queue
-            .write_buffer(&self.voxel_buffers[2], 0, bytemuck::cast_slice(&ore_data));
+        for i in 0..instance_data.len(){
+            self.queue
+            .write_buffer(&self.voxel_buffers[i], 0, bytemuck::cast_slice(&instance_data[i]));
+        }
+
+
 
         self.uniforms.update_view_proj(&self.camera);
         self.queue.write_buffer(
@@ -522,29 +517,15 @@ impl State {
 
             // Render each voxel buffer, passing information about the material that we're using (the last argument in the function call)
             // Materials info is stored in  "cube.mtl"
-            render_pass.set_vertex_buffer(1, self.voxel_buffers[0].slice(..));
-            render_pass.draw_voxels(
-                &self.voxel_model,
-                0..dirt_data.len() as u32,
-                &self.uniform_bind_group,
-                1,
-            );
-
-            render_pass.set_vertex_buffer(1, self.voxel_buffers[1].slice(..));
-            render_pass.draw_voxels( // SEE draw_voxels in model 
-                &self.voxel_model,
-                0..grass_data.len() as u32,
-                &self.uniform_bind_group,
-                0,
-            );
-
-            render_pass.set_vertex_buffer(1, self.voxel_buffers[2].slice(..));
-            render_pass.draw_voxels(
-                &self.voxel_model,
-                0..ore_data.len() as u32,
-                &self.uniform_bind_group,
-                2,
-            );
+            for i in 0..instance_data.len(){
+                render_pass.set_vertex_buffer(1, self.voxel_buffers[i].slice(..));
+                render_pass.draw_voxels(
+                    &self.voxel_model,
+                    0..instance_data[i].len() as u32,
+                    &self.uniform_bind_group,
+                    i,
+                );
+            }
         }
 
         self.queue.submit(iter::once(encoder.finish()));
@@ -640,9 +621,9 @@ pub fn voxels_from_chunk(chunk: & Chunk) -> Vec<Voxel>{
     for x in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
             for z in 0..CHUNK_SIZE {
-                let x_pos = (x as f32 * 1.0 ) + chunk.origin.x;
-                let y_pos = (y as f32 * 1.0 ) + chunk.origin.y;
-                let z_pos = (z as f32 * 1.0 ) + chunk.origin.z;
+                let x_pos = (x as f32 * VOXEL_HALFWIDTH/0.5 ) + chunk.origin.x;
+                let y_pos = (y as f32 * VOXEL_HALFWIDTH/0.5 ) + chunk.origin.y;
+                let z_pos = (z as f32 * VOXEL_HALFWIDTH/0.5 ) + chunk.origin.z;
                 let material = match chunk.data[x][y][z] {
                     0 => Material::Dirt,
                     1 => Material::Iron,
