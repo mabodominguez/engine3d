@@ -235,7 +235,8 @@ impl State {
             znear: 0.1,
             zfar: 200.0,
         };
-        let camera_controller = CameraController::new(0.2);
+        let window_size = window.inner_size();
+        let camera_controller = CameraController::new(0.2, (window_size.width / 2) as i32, (window_size.height / 2) as i32);
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -534,6 +535,9 @@ fn main() {
         .with_title(title)
         .build(&event_loop)
         .unwrap();
+    // grab cursor for camera
+    let _window_grab = window.set_cursor_grab(true);
+    window.set_cursor_icon(winit::window::CursorIcon::Crosshair);
     use futures::executor::block_on;
     let mut state = block_on(State::new(&window));
 
@@ -576,6 +580,7 @@ fn main() {
             }
             Event::RedrawRequested(_) => {
                 state.update();
+                let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(state.camera_controller.center_x, state.camera_controller.center_y));
                 match state.render() {
                     Ok(_) => {}
                     // Recreate the swap_chain if lost

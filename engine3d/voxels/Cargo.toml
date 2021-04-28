@@ -1,5 +1,5 @@
 [package]
-name = "collision3d"
+name = "voxels"
 version = "0.1.0"
 authors = ["somebody"]
 edition = "2018"
