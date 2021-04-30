@@ -1,6 +1,7 @@
 pub use cgmath::prelude::*;
 pub type Vec3 = cgmath::Vector3<f32>;
 pub type Pos3 = cgmath::Point3<f32>;
+pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -14,8 +15,6 @@ pub struct Plane {
     pub n: Vec3,
     pub d: f32,
 }
-
-
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BBox {

@@ -10,13 +10,14 @@ use winit::{
     window::Window,
 };
 pub type Pos3 = cgmath::Point3<f32>;
+pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
 mod geom;
 mod model;
 mod texture;
 
-use model::{DrawModel, Vertex};
+use model::{DrawModel, Vertex, VertexTwoD};
 
 mod camera;
 use camera::Camera;
@@ -24,11 +25,32 @@ mod camera_control;
 use camera_control::CameraController;
 // mod collision;
 
-
 const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
-const VOXEL_HALFWIDTH: f32 = 1.0;  // Size of a voxel (halfwidth)
+const VOXEL_HALFWIDTH: f32 = 1.0; // Size of a voxel (halfwidth)
 const DT: f32 = 1.0 / 30.0;
-const WORLD_DIMS: (usize, usize, usize) = (8,5,8); // The number of chunks that you want to load in 3D space
+const WORLD_DIMS: (usize, usize, usize) = (8, 5, 8); // The number of chunks that you want to load in 3D space
+const HOTBAR_HEIGHT: f32 = 0.0;
+const HOTBAR_WIDTH: f32 = 0.0;
+
+// tl, bl, tr, br
+const HOTBAR_VERTS: &[VertexTwoD] = &[
+    VertexTwoD {
+        position: [-1.0, -0.5], // make 0s -1s (x and y go from -1 to 1)
+        tex_coords: [0.0, 0.0],
+    },
+    VertexTwoD {
+        position: [-1.0, -1.0],
+        tex_coords: [0.0, 1.0],
+    },
+    VertexTwoD {
+        position: [1.0, -0.5],
+        tex_coords: [1.0, 0.0],
+    },
+    VertexTwoD {
+        position: [1.0, -1.0],
+        tex_coords: [1.0, 1.0],
+    },
+];
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -67,7 +89,7 @@ impl InstanceRaw {
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::< InstanceRaw>() as wgpu::BufferAddress,
+            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
             // We need to switch from using a step mode of Vertex to Instance
             // This means that our shaders will only change to use the next
             // instance when the shader starts processing a new instance
@@ -103,14 +125,16 @@ impl InstanceRaw {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Material { // Enumeration to determine the material of a voxel. Is useful for differntiating them
+pub enum Material {
+    // Enumeration to determine the material of a voxel. Is useful for differntiating them
     Grass,
     Dirt,
     Iron,
 }
 
 impl Material {
-    fn strength(&self) -> i32 { // Possibly useful function to determine how much time it takes to break a block
+    fn strength(&self) -> i32 {
+        // Possibly useful function to determine how much time it takes to break a block
         match *self {
             Material::Grass => 1,
             Material::Dirt => 2,
@@ -120,23 +144,29 @@ impl Material {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Voxel { // A voxel holds position and material info
+pub struct Voxel {
+    // A voxel holds position and material info
     pub center: Pos3,
     pub material: Material,
 }
 
+// TODO: Maya helpful!!!!
 impl Voxel {
-    fn to_raw(&self) -> InstanceRaw { // Turns vector position into gpu-friendly data
-        InstanceRaw { 
-            model: (Mat4::from_translation(self.center.to_vec()) * Mat4::from_scale(VOXEL_HALFWIDTH)).into(),
+    fn to_raw(&self) -> InstanceRaw {
+        // Turns vector position into gpu-friendly data
+        InstanceRaw {
+            model: (Mat4::from_translation(self.center.to_vec())
+                * Mat4::from_scale(VOXEL_HALFWIDTH))
+            .into(),
         }
     }
 }
 
-pub struct Chunk{ // Array that holds the vector info. It dimensions are CHUNK_SIZE^3 
+pub struct Chunk {
+    // Array that holds the vector info. It dimensions are CHUNK_SIZE^3
     // Holds a position and the data (which is just numbers)
     pub origin: Pos3,
-    pub data:  [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]
+    pub data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
 }
 
 struct State {
@@ -154,12 +184,15 @@ struct State {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     voxels: Vec<Voxel>, // Array holding all the voxels. TODO: Don't make this hold every single voxel if we're going to expand the entire world
-                        // rather, it should hold the voxels to be rendered
+    // rather, it should hold the voxels to be rendered
     #[allow(dead_code)]
     voxel_buffers: Vec<wgpu::Buffer>, // Wgpu buffer vector containing buffers for each individual type of voxel (i.e grass, ore, etc.)
     depth_texture: texture::Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
-    instance_data : Vec<Vec<InstanceRaw>> 
+    instance_data: Vec<Vec<InstanceRaw>>,
+    hotbar_buffer: wgpu::Buffer,
+    hotbar_bind_group: wgpu::BindGroup,
+    render_2d_pipeline: wgpu::RenderPipeline,
 }
 
 impl State {
@@ -252,36 +285,38 @@ impl State {
 
         // Create Chunks here
         // Iterate through the world chunks, and in each chunk place a random voxel
-        let vox_size  = VOXEL_HALFWIDTH*2.0; // Offset for chunks in 3D space depending on the size of the voxel size
-        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] = [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]; 
-        for cx in 0..WORLD_DIMS.0{
-            for cy in 0..WORLD_DIMS.1{
-                for cz in 0..WORLD_DIMS.2{
+        let vox_size = VOXEL_HALFWIDTH * 2.0; // Offset for chunks in 3D space depending on the size of the voxel size
+        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
+            [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+        for cx in 0..WORLD_DIMS.0 {
+            for cy in 0..WORLD_DIMS.1 {
+                for cz in 0..WORLD_DIMS.2 {
                     for x in 0..CHUNK_SIZE {
                         for y in 0..CHUNK_SIZE {
                             for z in 0..CHUNK_SIZE {
                                 chunk_data[x][y][z] = rng.gen_range::<usize, Range<usize>>(0..3);
-
                             }
                         }
                     }
-                    chunks.push(Chunk{
-                        origin: Pos3::new(cx as f32 * CHUNK_SIZE as f32 *  vox_size, cy as f32 * CHUNK_SIZE as f32 * -1.0 *  vox_size, 
-                                          cz as f32 * CHUNK_SIZE as f32 *  vox_size),
-                        data: chunk_data
+                    chunks.push(Chunk {
+                        origin: Pos3::new(
+                            cx as f32 * CHUNK_SIZE as f32 * vox_size,
+                            cy as f32 * CHUNK_SIZE as f32 * -1.0 * vox_size,
+                            cz as f32 * CHUNK_SIZE as f32 * vox_size,
+                        ),
+                        data: chunk_data,
                     });
                 }
             }
-        } 
-        
+        }
         let mut voxels: Vec<Voxel> = Vec::new();
         // Turn every chunk data into a voxel. TODO: this could be made faster by just ditching the Voxel struct all together
-        for i in 0..chunks.len(){
-            voxels.append( &mut voxels_from_chunk(&chunks[i]));
+        for i in 0..chunks.len() {
+            voxels.append(&mut voxels_from_chunk(&chunks[i]));
         }
 
         let res_dir = std::path::Path::new(env!("OUT_DIR")).join("content");
-        // Create voxel model struct. This is a simple cube that's used as base for every voxel 
+        // Create voxel model struct. This is a simple cube that's used as base for every voxel
         let voxel_model = model::Model::load(
             &device,
             &queue,
@@ -290,14 +325,13 @@ impl State {
         )
         .unwrap();
 
-
-        // Individual data arrays that hold data about each material 
-        let mut instance_data : Vec<Vec<InstanceRaw>> = Vec::new();
+        // Individual data arrays that hold data about each material
+        let mut instance_data: Vec<Vec<InstanceRaw>> = Vec::new();
         for _ in 0..voxel_model.materials.len() {
             instance_data.push(Vec::new());
         }
 
-        for i in 0..voxels.len(){
+        for i in 0..voxels.len() {
             match voxels[i].material {
                 Material::Grass => instance_data[0].push(voxels[i].to_raw()),
                 Material::Dirt => instance_data[1].push(voxels[i].to_raw()),
@@ -305,18 +339,95 @@ impl State {
             }
         }
 
+        // TODO: finish this!
+        // let mut d_instance_data: Vec<InstanceRaw> = Vec::new();
+        // d_instance_data.push(vec![
+        //     Pos2 { x: 0.0, y: 0.0 },
+        //     Pos2 {
+        //         x: HOTBAR_WIDTH,
+        //         y: 0.0,
+        //     },
+        //     Pos2 {
+        //         x: 0.0,
+        //         y: HOTBAR_HEIGHT,
+        //     },
+        //     Pos2 {
+        //         x: HOTBAR_WIDTH,
+        //         y: HOTBAR_HEIGHT,
+        //     },
+        // ]);
+
+        let hotbar_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(HOTBAR_VERTS),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
+
+        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+        let vs_2d_module = device.create_shader_module(&wgpu::include_spirv!("shader2d.vert.spv"));
+
+        let render_2d_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render 2d Pipeline Layout"),
+                bind_group_layouts: &[&texture_bind_group_layout], // need a bind group for
+                push_constant_ranges: &[],
+            });
+        let render_2d_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render 2d Pipeline"),
+            layout: Some(&render_2d_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &vs_2d_module,          //new vs module based on new shader vert
+                entry_point: "main",            // 1.
+                buffers: &[VertexTwoD::desc()], // 2.
+            },
+            fragment: Some(wgpu::FragmentState {
+                // 3.
+                module: &fs_module, // can use same fs module
+                entry_point: "main",
+                targets: &[wgpu::ColorTargetState {
+                    // 4.
+                    format: sc_desc.format,
+                    alpha_blend: wgpu::BlendState::REPLACE,
+                    color_blend: wgpu::BlendState::REPLACE,
+                    write_mask: wgpu::ColorWrite::ALL,
+                }],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip, // TODO: how does this change for a rectangle?
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: wgpu::CullMode::None,
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                // Setting this to true requires Features::DEPTH_CLAMPING
+                clamp_depth: false,
+            }), // 1.
+            multisample: wgpu::MultisampleState {
+                count: 1,                         // 2.
+                mask: !0,                         // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
+        });
+
         // Push data into unique buffers so we know what material to use
         // TODO: This might not be super necessary, because the raw data is just a bunch of positions
         let mut voxel_buffers: Vec<wgpu::Buffer> = Vec::new();
         for i in 0..instance_data.len() {
             voxel_buffers.push(
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some( &i.to_string()),
+                    label: Some(&i.to_string()),
                     contents: bytemuck::cast_slice(&instance_data[i]),
                     usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
                 }),
             );
-        }   
+        }
 
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -341,11 +452,35 @@ impl State {
             }],
             label: Some("uniform_bind_group"),
         });
+        let diffuse_path = "hotbar.png";
+        let diffuse_texture =
+            texture::Texture::load(&device, &queue, res_dir.join(diffuse_path)).unwrap();
 
-        
+        let hotbar_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                },
+            ],
+            label: Some("hotbar_bind_group"),
+        });
+        // let hotbar_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        //     layout: &uniform_bind_group_layout,
+        //     entries: &[wgpu::BindGroupEntry {
+        //         binding: 0,
+        //         resource: uniform_buffer.as_entire_binding(),
+        //     }],
+        //     label: Some("uniform_bind_group"),
+        // });
 
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
+        // let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
@@ -356,9 +491,9 @@ impl State {
                 bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
                 push_constant_ranges: &[],
             });
-
+        // let render_2d_pipeline = device.create_render_pipeline()
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Render 3d Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &vs_module,
@@ -399,7 +534,6 @@ impl State {
             },
         });
 
-        
         Self {
             surface,
             device,
@@ -418,7 +552,10 @@ impl State {
             voxel_buffers,
             depth_texture,
             chunks,
-            instance_data
+            instance_data,
+            hotbar_buffer,
+            hotbar_bind_group,
+            render_2d_pipeline,
         }
     }
 
@@ -445,22 +582,21 @@ impl State {
 
     fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
         // Update buffers based on dynamics
-        
         // TODO: This is a repeated line of code, but I needed to have it here to make sure everything works
         //       We could just put the data into the struct so we avoid iterating a whole bunch of times
         //       The only thing that worries me is how we're going to handle updating voxels in a single chunk efficiently
         //       In the future, we could just update data on the current chunk that the player is standing every frame, while we don't worry
         //       about chunks that are further away
-                // Individual data arrays that hold data about each material 
+        // Individual data arrays that hold data about each material
 
-        
         // Add buffers to the queue
-        for i in 0..self.instance_data.len(){
-            self.queue
-            .write_buffer(&self.voxel_buffers[i], 0, bytemuck::cast_slice(&self.instance_data[i]));
+        for i in 0..self.instance_data.len() {
+            self.queue.write_buffer(
+                &self.voxel_buffers[i],
+                0,
+                bytemuck::cast_slice(&self.instance_data[i]),
+            );
         }
-
-
 
         self.uniforms.update_view_proj(&self.camera);
         self.queue.write_buffer(
@@ -506,7 +642,7 @@ impl State {
 
             // Render each voxel buffer, passing information about the material that we're using (the last argument in the function call)
             // Materials info is stored in  "cube.mtl"
-            for i in 0..self.instance_data.len(){
+            for i in 0..self.instance_data.len() {
                 render_pass.set_vertex_buffer(1, self.voxel_buffers[i].slice(..));
                 render_pass.draw_voxels(
                     &self.voxel_model,
@@ -515,6 +651,13 @@ impl State {
                     i,
                 );
             }
+            // set 2d pipeline, make sure texture is updated, provide a texture bindgroup
+            // call draw on what vertices to draw
+
+            render_pass.set_pipeline(&self.render_2d_pipeline);
+            render_pass.set_vertex_buffer(0, self.hotbar_buffer.slice(..));
+            render_pass.set_bind_group(0, &self.hotbar_bind_group, &[]);
+            render_pass.draw(0..4 as u32, 0..1);
         }
 
         self.queue.submit(iter::once(encoder.finish()));
@@ -524,10 +667,8 @@ impl State {
 }
 
 fn main() {
-
     use std::time::Instant;
     env_logger::init();
-    
     let event_loop = EventLoop::new();
     let title = env!("CARGO_PKG_NAME");
     let window = winit::window::WindowBuilder::new()
@@ -605,27 +746,25 @@ fn main() {
 }
 
 // Function to create voxels from the info matrix in a chunk
-pub fn voxels_from_chunk(chunk: & Chunk) -> Vec<Voxel>{
-    let mut voxels: Vec<Voxel> = vec!();
+pub fn voxels_from_chunk(chunk: &Chunk) -> Vec<Voxel> {
+    let mut voxels: Vec<Voxel> = vec![];
     for x in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
             for z in 0..CHUNK_SIZE {
-                let x_pos = (x as f32 * VOXEL_HALFWIDTH/0.5 ) + chunk.origin.x;
-                let y_pos = (y as f32 * VOXEL_HALFWIDTH/0.5 ) + chunk.origin.y;
-                let z_pos = (z as f32 * VOXEL_HALFWIDTH/0.5 ) + chunk.origin.z;
+                let x_pos = (x as f32 * VOXEL_HALFWIDTH / 0.5) + chunk.origin.x;
+                let y_pos = (y as f32 * VOXEL_HALFWIDTH / 0.5) + chunk.origin.y;
+                let z_pos = (z as f32 * VOXEL_HALFWIDTH / 0.5) + chunk.origin.z;
                 let material = match chunk.data[x][y][z] {
                     0 => Material::Dirt,
                     1 => Material::Iron,
-                    _ => Material::Grass
+                    _ => Material::Grass,
                 };
-                voxels.push(
-                    Voxel {
-                        center: Pos3::new(x_pos, y_pos, z_pos),
-                        material,
-                    }
-                )
+                voxels.push(Voxel {
+                    center: Pos3::new(x_pos, y_pos, z_pos),
+                    material,
+                })
             }
         }
     }
-    return  voxels
+    return voxels;
 }

@@ -11,6 +11,34 @@ pub trait Vertex {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct VertexTwoD {
+    pub position: [f32; 2],
+    pub tex_coords: [f32; 2],
+}
+
+impl VertexTwoD {
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<VertexTwoD>() as wgpu::BufferAddress,
+            step_mode: wgpu::InputStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float2, //could fit both pos and tex
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float2,
+                },
+            ],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ModelVertex {
     position: [f32; 3],
     tex_coords: [f32; 2],
@@ -167,7 +195,8 @@ where
         uniforms: &'b wgpu::BindGroup,
     );
 
-    fn draw_voxels(  // Custom function to render voxels given the texture information
+    fn draw_voxels(
+        // Custom function to render voxels given the texture information
         &mut self,
         model: &'b Model,
         instances: Range<u32>,
@@ -214,7 +243,8 @@ where
         }
     }
 
-    fn draw_voxels( // Custom function to render voxels given the texture information
+    fn draw_voxels(
+        // Custom function to render voxels given the texture information
         &mut self,
         model: &'b Model,
         instances: Range<u32>,
