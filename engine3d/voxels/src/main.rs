@@ -1,5 +1,6 @@
 use cgmath::num_traits::Pow;
 use cgmath::prelude::*;
+use cgmath::*;
 use rand;
 use std::iter;
 use std::ops::Range;
@@ -16,12 +17,15 @@ mod geom;
 mod model;
 mod texture;
 
+use geom::{BBox};
 use model::{DrawModel, Vertex};
 
 mod camera;
 use camera::Camera;
 mod camera_control;
 use camera_control::CameraController;
+mod player;
+use player::Player;
 // mod collision;
 
 
@@ -159,7 +163,8 @@ struct State {
     voxel_buffers: Vec<wgpu::Buffer>, // Wgpu buffer vector containing buffers for each individual type of voxel (i.e grass, ore, etc.)
     depth_texture: texture::Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
-    instance_data : Vec<Vec<InstanceRaw>> 
+    instance_data : Vec<Vec<InstanceRaw>>,
+    player: Player,
 }
 
 impl State {
@@ -237,6 +242,8 @@ impl State {
         };
         let window_size = window.inner_size();
         let camera_controller = CameraController::new(0.2, (window_size.width / 2) as i32, (window_size.height / 2) as i32);
+        let mut player_hitbox = BBox{center: cgmath::point3(0.0, 0.0, 0.0), halfwidth: 5.0};
+        let mut player = Player::new(player_hitbox);
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -419,7 +426,8 @@ impl State {
             voxel_buffers,
             depth_texture,
             chunks,
-            instance_data
+            instance_data,
+            player,
         }
     }
 
@@ -435,10 +443,12 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         //TODO shift plane
+        self.player.process_events(event);
         self.camera_controller.process_events(event)
     }
 
     fn update(&mut self) {
+        self.player.update(&mut self.camera);
         self.camera_controller.update_camera(&mut self.camera);
         // we ~could~ move the plane, or we could just tweak gravity.
         // this time we'll move the plane.
