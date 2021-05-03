@@ -30,19 +30,19 @@ const HOTBAR_WIDTH: f32 = 0.0;
 // tl, bl, tr, br
 const HOTBAR_VERTS: &[VertexTwoD] = &[
     VertexTwoD {
-        position: [-1.0, -0.5], // make 0s -1s (x and y go from -1 to 1)
+        position: [-0.9, -0.5], // make 0s -1s (x and y go from -1 to 1)
         tex_coords: [0.0, 0.0],
     },
     VertexTwoD {
-        position: [-1.0, -1.0],
+        position: [-0.9, -0.9],
         tex_coords: [0.0, 1.0],
     },
     VertexTwoD {
-        position: [1.0, -0.5],
+        position: [0.9, -0.5],
         tex_coords: [1.0, 0.0],
     },
     VertexTwoD {
-        position: [1.0, -1.0],
+        position: [0.9, -0.9],
         tex_coords: [1.0, 1.0],
     },
 ];
