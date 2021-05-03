@@ -1,5 +1,5 @@
-use super::{Cube, Marble, Wall};
 use crate::geom::*;
+use crate::{Cube, Marble, Wall}; //something happening here
 
 #[derive(Clone, Copy, Debug)]
 pub struct Contact<T: Copy> {
