@@ -15,6 +15,7 @@ pub struct Player {
     is_left_pressed: bool,
     is_right_pressed: bool,
     jump_pressed:bool,
+    pub can_jump:bool,
     pub x_pos_blocked: bool,
     pub x_neg_blocked: bool,
     pub y_pos_blocked: bool,
@@ -37,6 +38,7 @@ impl Player {
             is_left_pressed: false,
             is_right_pressed: false,
             jump_pressed: false,
+            can_jump: false,
             x_pos_blocked: false,
             x_neg_blocked: false,
             y_pos_blocked: false,
@@ -49,13 +51,13 @@ impl Player {
         return self.hitbox.center;
     }
     pub fn change_pos(&mut self, x: f32, y: f32, z: f32) {
-        if ((x > 0.0 && !self.x_pos_blocked) || (x < 0.0 && !self.x_neg_blocked)) {
+        if (x > 0.0 && !self.x_pos_blocked) || (x < 0.0 && !self.x_neg_blocked) {
             self.hitbox.center.x += x;
         }
-        if ((y > 0.0 && !self.y_pos_blocked) || (y < 0.0 && !self.y_neg_blocked)) {
+        if (y > 0.0 && !self.y_pos_blocked) || (y < 0.0 && !self.y_neg_blocked) {
             self.hitbox.center.y += y;
         }
-        if ((z > 0.0 && !self.z_pos_blocked) || (z < 0.0 && !self.z_neg_blocked)) {
+        if (z > 0.0 && !self.z_pos_blocked) || (z < 0.0 && !self.z_neg_blocked) {
             self.hitbox.center.z += z;
         }
     }
@@ -69,16 +71,18 @@ impl Player {
     }
     pub fn update(&mut self, camera: &mut Camera) {
         //change position based on velocity
-        if (self.jump_pressed) {
-            self.vy = 0.7;
-        }
+        
         if (!self.y_neg_blocked) {
-            self.vy -= 0.05;//gravity
-            if (self.vy <= -0.05) { //terminal velocity
-                self.vy = -0.05;
+            self.vy -= 0.005;//gravity
+            if (self.vy <= -0.2) { //terminal velocity
+                self.vy = -0.2;
             }
         } else {
             self.vy = 0.0;
+        }
+        if (self.jump_pressed && self.can_jump) {
+            self.vy = 0.15;
+            self.can_jump = false;
         }
         self.change_pos(0.0, self.vy, 0.0);
 
@@ -158,7 +162,7 @@ impl Player {
                         self.is_right_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::J => {
+                    VirtualKeyCode::Space => {
                         self.jump_pressed = is_pressed;
                         true
                     }

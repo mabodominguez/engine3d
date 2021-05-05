@@ -379,23 +379,24 @@ impl State {
         
         collision::update(&self.voxels, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
         self.player.reset_blocked();
-        for collision::Contact { mtv: disp, .. } in self.contacts.player_block.iter() {
-            if (disp.x > 0.0) {
+        for collision::Contact { mtv: disp, .. } in self.contacts.block_player.iter() {
+            if disp.x > 0.0 {
                 self.player.x_neg_blocked = true;
             }
-            if (disp.x < 0.0) {
+            if disp.x < 0.0 {
                 self.player.x_pos_blocked = true;
             }
-            if (disp.y > 0.0) {
+            if disp.y > 0.0 {
                 self.player.y_neg_blocked = true;
+                self.player.can_jump = true;
             }
-            if (disp.y < 0.0) {
+            if disp.y < 0.0 {
                 self.player.y_pos_blocked = true;
             }
-            if (disp.z > 0.0) {
+            if disp.z > 0.0 {
                 self.player.z_neg_blocked = true;
             }
-            if (disp.z < 0.0) {
+            if disp.z < 0.0 {
                 self.player.z_pos_blocked = true;
             }
         }
