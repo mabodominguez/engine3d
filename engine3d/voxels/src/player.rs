@@ -7,12 +7,20 @@ pub struct Player {
     pub hitbox:BBox,
     pub vx: f32,
     pub vy: f32,
+    pub vz: f32,
     pub facing_direction: Vec3,
     pub speed: f32,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    jump_pressed:bool,
+    pub x_pos_blocked: bool,
+    pub x_neg_blocked: bool,
+    pub y_pos_blocked: bool,
+    pub y_neg_blocked: bool,
+    pub z_pos_blocked: bool,
+    pub z_neg_blocked: bool,
 }
 
 impl Player {
@@ -21,23 +29,60 @@ impl Player {
             hitbox: hitbox,
             vx: 0.0,
             vy: 0.0,
+            vz: 0.0,
             facing_direction: cgmath::vec3(0.0, 0.0, 0.0),
-            speed: 0.5,
+            speed: 0.2,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
             is_right_pressed: false,
+            jump_pressed: false,
+            x_pos_blocked: false,
+            x_neg_blocked: false,
+            y_pos_blocked: false,
+            y_neg_blocked: false,
+            z_pos_blocked: false,
+            z_neg_blocked: false,
         }
     }
     pub fn get_pos(&self) -> Pos3 {
         return self.hitbox.center;
     }
     pub fn change_pos(&mut self, x: f32, y: f32, z: f32) {
-        self.hitbox.center.x += x;
-        self.hitbox.center.y += y;
-        self.hitbox.center.z += z;
+        if ((x > 0.0 && !self.x_pos_blocked) || (x < 0.0 && !self.x_neg_blocked)) {
+            self.hitbox.center.x += x;
+        }
+        if ((y > 0.0 && !self.y_pos_blocked) || (y < 0.0 && !self.y_neg_blocked)) {
+            self.hitbox.center.y += y;
+        }
+        if ((z > 0.0 && !self.z_pos_blocked) || (z < 0.0 && !self.z_neg_blocked)) {
+            self.hitbox.center.z += z;
+        }
+    }
+    pub fn reset_blocked(&mut self) {
+        self.x_pos_blocked = false;
+        self.x_neg_blocked = false;
+        self.y_pos_blocked = false;
+        self.y_neg_blocked = false;
+        self.z_pos_blocked = false;
+        self.z_neg_blocked = false;
     }
     pub fn update(&mut self, camera: &mut Camera) {
+        //change position based on velocity
+        if (self.jump_pressed) {
+            self.vy = 0.7;
+        }
+        if (!self.y_neg_blocked) {
+            self.vy -= 0.05;//gravity
+            if (self.vy <= -0.05) { //terminal velocity
+                self.vy = -0.05;
+            }
+        } else {
+            self.vy = 0.0;
+        }
+        self.change_pos(0.0, self.vy, 0.0);
+
+        //change camera position to player position
         let mut forward = camera.target - camera.eye;
         forward.y = 0.0;
         let forward_norm = forward.normalize();
@@ -45,7 +90,6 @@ impl Player {
         let right = forward_norm.cross(camera.up);
         if self.is_forward_pressed {
             let movement = forward_norm * self.speed;
-            println!("{}", movement.x);
             self.change_pos(movement.x, 0.0, movement.z);
         }
         if self.is_backward_pressed {
@@ -96,6 +140,26 @@ impl Player {
                     }
                     VirtualKeyCode::Right => {
                         self.is_right_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::W => {
+                        self.is_forward_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::A => {
+                        self.is_left_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::S => {
+                        self.is_backward_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::D => {
+                        self.is_right_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::J => {
+                        self.jump_pressed = is_pressed;
                         true
                     }
                     _ => false,
