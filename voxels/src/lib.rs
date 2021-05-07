@@ -33,7 +33,7 @@ pub trait Game: Sized {
 pub struct Engine {
     pub frame: usize,
     pub assets: Assets,
-    render: Render,
+    pub render: Render,
     pub events: Events,
 }
 
