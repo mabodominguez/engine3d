@@ -7,9 +7,10 @@ use crate::model;
 use crate::texture;
 
 use cgmath::prelude::*;
-
+use crate::geom::{Mat4, Pos3, BBox};
 use crate::model::{DrawModel, Vertex, VertexTwoD};
 use crate::render::InstanceRaw;
+use cgmath::EuclideanSpace;
 
 const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
 const VOXEL_HALFWIDTH: f32 = 1.0; // Size of a voxel (halfwidth)
@@ -24,8 +25,8 @@ pub enum Material {
 }
 
 impl Material {
-    fn strength(&self) -> i32 {
-        // Possibly useful function to determine how much time it takes to break a block
+    pub fn strength(&self) -> i32 { // Possibly useful function to determine how much time it takes to break a block
+
         match *self {
             Material::Grass => 1,
             Material::Dirt => 2,
@@ -35,8 +36,7 @@ impl Material {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Voxel {
-    // A voxel holds position and material info
+pub struct Voxel { // A voxel holds position and material info
     pub center: Pos3,
     pub material: Material,
 }
