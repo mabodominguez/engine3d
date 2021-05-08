@@ -5,6 +5,7 @@ use crate::model::*;
 use crate::texture::Texture;
 use crate::voxel::{Chunk, Material, Voxel};
 use crate::Game;
+use crate::Events;
 use cgmath::num_traits::Pow;
 use cgmath::prelude::*;
 use rand;
@@ -130,6 +131,7 @@ pub struct Render {
     render_pipeline: wgpu::RenderPipeline,
     pub(crate) texture_layout: wgpu::BindGroupLayout,
     pub(crate) camera: Camera,
+    pub camera_controller: CameraController,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
@@ -221,7 +223,7 @@ impl Render {
             znear: 0.1,
             zfar: 200.0,
         };
-        let camera_controller = CameraController::new(0.2);
+        let camera_controller = CameraController::new(0.2, size.width as i32/ 2, size.height as i32/ 2);
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -469,6 +471,7 @@ impl Render {
             render_pipeline,
             texture_layout: texture_bind_group_layout,
             camera,
+            camera_controller,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -550,10 +553,14 @@ impl Render {
         }
     }
 
-    fn input(&mut self, event: &WindowEvent) -> bool {
-        true
+    fn input(&mut self, event: &Events) -> bool {
         //TODO shift plane
-        // self.camera_controller.process_events(event)
+        self.camera_controller.process_events(events);
+        true
+    }
+
+    pub fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
     }
 
     pub(crate) fn render<R, G: Game<StaticData = R>>(

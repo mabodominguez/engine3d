@@ -29,7 +29,7 @@ impl Game for Game1 {
             },
             chunks: vec![],
         };
-        return (game, Rule::Title);
+        return (game, Rule::Play);
     }
     fn update(&mut self, rules: &Self::StaticData, engine: &mut Engine) {
         match rules {
@@ -77,6 +77,8 @@ impl Game for Game1 {
                 // Change this with new camera code and stuff
                 // engine.camera_controller.update_camera(&mut engine.render.camera);
                 // render hot bar and stuff? change assets unclear
+                engine.render.input(&engine.events);
+                engine.render.update();
             }
             Rule::End => {
                 // render end screen
@@ -84,7 +86,16 @@ impl Game for Game1 {
             }
         }
     }
-    fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {}
+    fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {
+        match rules {
+            Rule::Title => {
+            }
+            Rule::Play => {
+            }
+            Rule::End => {
+            }
+        }
+    }
 }
 
 fn main() {

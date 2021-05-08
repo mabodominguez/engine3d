@@ -7,7 +7,7 @@ use crate::model;
 use crate::texture;
 
 use cgmath::prelude::*;
-use crate::geom::{Mat4, Pos3, BBox};
+use crate::geom::{BBox};
 use crate::model::{DrawModel, Vertex, VertexTwoD};
 use crate::render::InstanceRaw;
 use cgmath::EuclideanSpace;
@@ -49,6 +49,9 @@ impl Voxel {
                 * Mat4::from_scale(VOXEL_HALFWIDTH))
             .into(),
         }
+    }
+    pub fn get_bbox(&self) -> BBox {
+        return BBox{center:self.center, halfwidth:VOXEL_HALFWIDTH};
     }
 }
 
