@@ -1,4 +1,4 @@
-use crate::assets::Assets;
+use crate::assets::{Asset2d, Assets, Object2d};
 use crate::camera::Camera;
 use crate::camera_control::CameraController;
 use crate::model::*;
@@ -55,6 +55,9 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     0.0, 0.0, 0.5, 0.0,
     0.0, 0.0, 0.5, 1.0,
 );
+
+#[derive(Copy, Clone)]
+pub struct TwoDID(usize, usize, bool);
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -140,6 +143,9 @@ pub struct Render {
     depth_texture: Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
     instance_data: Vec<Vec<InstanceRaw>>,
+    buffers_2d: Vec<wgpu::Buffer>,
+    bind_groups_2d: Vec<wgpu::BindGroup>,
+    pub(crate) objects_2d: Vec<TwoDID>,
     hotbar_buffer: wgpu::Buffer,
     hotbar_bind_group: wgpu::BindGroup,
     render_2d_pipeline: wgpu::RenderPipeline,
@@ -279,7 +285,9 @@ impl Render {
         for _ in 0..voxel_model.materials.len() {
             instance_data.push(Vec::new());
         }
-
+        let buffers_2d = vec![];
+        let bind_groups_2d = vec![];
+        let objects_2d = vec![];
         for i in 0..voxels.len() {
             match voxels[i].material {
                 Material::Grass => instance_data[0].push(voxels[i].to_raw()),
@@ -287,7 +295,6 @@ impl Render {
                 Material::Iron => instance_data[2].push(voxels[i].to_raw()),
             }
         }
-
         let hotbar_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(HOTBAR_VERTS),
@@ -474,6 +481,9 @@ impl Render {
             depth_texture,
             chunks,
             instance_data,
+            buffers_2d,
+            bind_groups_2d,
+            objects_2d,
             hotbar_buffer,
             hotbar_bind_group,
             render_2d_pipeline,
@@ -490,7 +500,60 @@ impl Render {
             Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
     }
 
-    pub fn input(&mut self, events: &Events) -> bool {
+    /// Use to set up 2d objects to be drawn
+    pub fn set_2d_buffers(&mut self, objects_2d: &Vec<Object2d>) {
+        // re use buffers ... have add/remove 2d funtion called from update
+        for object in objects_2d {
+            let buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&object.verts),
+                    usage: wgpu::BufferUsage::VERTEX,
+                });
+            self.buffers_2d.push(buffer);
+            self.objects_2d
+                .push(TwoDID(self.objects_2d.len(), object.bg, object.visible));
+        }
+    }
+
+    /// Use to update a 2d buffer
+    pub fn update_2d_buffer<R, G: Game<StaticData = R>>(
+        &mut self,
+        object: &Object2d,
+        object_id: TwoDID,
+    ) {
+        self.queue.write_buffer(
+            &self.buffers_2d[object_id.0],
+            0,
+            bytemuck::cast_slice(&object.verts),
+        );
+    }
+
+    /// Use to set up all the textures to be drawn
+    pub fn set_2d_bind_groups(&mut self, assets_2d: &Vec<Asset2d>) {
+        for asset in assets_2d {
+            let diffuse_texture = Texture::load(&self.device, &self.queue, &asset.0).unwrap();
+
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.texture_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                    },
+                ],
+                label: Some("hotbar_bind_group"), // change to be dependent
+            });
+            self.bind_groups_2d.push(bind_group);
+        }
+    }
+
+    fn input(&mut self, event: &Events) -> bool {
         //TODO shift plane
         self.camera_controller.process_events(events);
         true
@@ -580,9 +643,14 @@ impl Render {
             // call draw on what vertices to draw
 
             render_pass.set_pipeline(&self.render_2d_pipeline);
-            render_pass.set_vertex_buffer(0, self.hotbar_buffer.slice(..));
-            render_pass.set_bind_group(0, &self.hotbar_bind_group, &[]);
-            render_pass.draw(0..4 as u32, 0..1);
+            for object in &self.objects_2d {
+                // if visible, draw it
+                if object.2 {
+                    render_pass.set_vertex_buffer(0, self.buffers_2d[object.0].slice(..));
+                    render_pass.set_bind_group(0, &self.bind_groups_2d[object.1], &[]);
+                    render_pass.draw(0..4 as u32, 0..1);
+                }
+            }
         }
 
         self.queue.submit(iter::once(encoder.finish()));

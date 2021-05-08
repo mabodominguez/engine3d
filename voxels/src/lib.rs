@@ -21,7 +21,8 @@ use events::Events;
 pub mod render;
 use render::Render;
 pub mod assets;
-use assets::Assets;
+
+use assets::{Asset2d, Assets, Object2d};
 
 pub const DT: f32 = 1.0 / 60.0;
 

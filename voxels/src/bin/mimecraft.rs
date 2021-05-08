@@ -1,4 +1,4 @@
-use engine3d::assets::*;
+use engine3d::assets::{Asset2d, Assets, Object2d};
 use engine3d::camera::*;
 use engine3d::events::*;
 use engine3d::model::*;
@@ -7,6 +7,7 @@ use engine3d::{Engine, Game};
 pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
+pub use winit::event::VirtualKeyCode as KeyCode;
 
 pub struct Game1 {
     camera_pos: Pos3,
@@ -14,7 +15,7 @@ pub struct Game1 {
 }
 pub enum Rule {
     Title,
-    Play,
+    Play(usize), // what part of the inventory
     End,
 }
 impl Game for Game1 {
@@ -33,14 +34,46 @@ impl Game for Game1 {
     fn update(&mut self, rules: &Self::StaticData, engine: &mut Engine) {
         match rules {
             Rule::Title => {
-                // if engine.events.key_pressed(Keycode::Space) {
-                //     // Somehow change to the play screen
-                // }
+                // potentially move this to start? unsure
+                let title_bg = vec![engine3d::assets::Asset2d(
+                    std::path::Path::new(env!("OUT_DIR"))
+                        .join("content")
+                        .join("titlescreen.png"),
+                )];
+                let title_objects = vec![engine3d::assets::Object2d {
+                    bg: 0,
+                    verts: [
+                        VertexTwoD {
+                            position: [-0.9, -0.5], // make 0s -1s (x and y go from -1 to 1)
+                            tex_coords: [0.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.9, -0.9],
+                            tex_coords: [0.0, 1.0],
+                        },
+                        VertexTwoD {
+                            position: [0.9, -0.5],
+                            tex_coords: [1.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [0.9, -0.9],
+                            tex_coords: [1.0, 1.0],
+                        },
+                    ],
+                    visible: true,
+                }];
+                engine.render.set_2d_bind_groups(&title_bg);
+                engine.render.set_2d_buffers(&title_objects);
+
+                if engine.events.key_pressed(KeyCode::Space) {
+                    // change rule to play
+                    // Somehow change to the play screen
+                }
                 // here is a good place to handle loading
                 // render title screen
                 // handle key press to go to play
             }
-            Rule::Play => {
+            Rule::Play(i) => {
                 // Change this with new camera code and stuff
                 // engine.camera_controller.update_camera(&mut engine.render.camera);
                 // render hot bar and stuff? change assets unclear
