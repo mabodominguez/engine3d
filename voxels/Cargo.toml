@@ -16,6 +16,8 @@ tobj = "2.0"
 wgpu = "0.7"
 winit = "0.24.0"
 rand = "0.8.3"
+serde = { version = "1.0.125", features = ["derive"] }
+serde_json = "1.0.64"
 
 [build-dependencies]
 anyhow = "1.0"

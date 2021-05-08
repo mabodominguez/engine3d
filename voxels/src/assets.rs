@@ -8,6 +8,12 @@ pub struct RigRef(usize);
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct AnimRef(usize);
 
+pub struct Object2d {
+    pub bg: usize,
+    pub visible: bool,
+    pub verts: [VertexTwoD; 4],
+}
+pub struct Asset2d(pub PathBuf);
 pub struct Assets {
     asset_root: PathBuf,
     models: HashMap<ModelRef, Model>,
