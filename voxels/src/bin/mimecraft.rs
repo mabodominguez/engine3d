@@ -1,4 +1,4 @@
-use engine3d::assets::*;
+use engine3d::assets::{Asset2d, Assets, Object2d};
 use engine3d::camera::*;
 use engine3d::events::*;
 use engine3d::model::*;
@@ -7,6 +7,7 @@ use engine3d::{Engine, Game};
 pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
+pub use winit::event::VirtualKeyCode as KeyCode;
 
 pub struct Game1 {
     camera_pos: Pos3,
@@ -58,14 +59,13 @@ impl Game for Game1 {
                             position: [0.9, -0.9],
                             tex_coords: [1.0, 1.0],
                         },
-                    ]
-                    .slice(..),
+                    ],
                     visible: true,
                 }];
                 engine.render.set_2d_bind_groups(&title_bg);
                 engine.render.set_2d_buffers(&title_objects);
 
-                if engine.events.key_pressed(Keycode::Space) {
+                if engine.events.key_pressed(KeyCode::Space) {
                     // change rule to play
                     // Somehow change to the play screen
                 }

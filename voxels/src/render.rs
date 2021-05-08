@@ -120,7 +120,7 @@ impl InstanceRaw {
         }
     }
 }
-pub(crate) struct Render {
+pub struct Render {
     surface: wgpu::Surface,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -498,9 +498,9 @@ impl Render {
     }
 
     /// Use to set up 2d objects to be drawn
-    pub fn set_2d_buffers<R, G: Game<StaticData = R>>(&mut self, objects_2d: &Vec<Object2d>) {
+    pub fn set_2d_buffers(&mut self, objects_2d: &Vec<Object2d>) {
         // re use buffers ... have add/remove 2d funtion called from update
-        for object in objects_2d.slice(..) {
+        for object in objects_2d {
             let buffer = self
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -528,7 +528,7 @@ impl Render {
     }
 
     /// Use to set up all the textures to be drawn
-    pub fn set_2d_bind_groups<R, G: Game<StaticData = R>>(&mut self, assets_2d: Vec<&Asset2d>) {
+    pub fn set_2d_bind_groups(&mut self, assets_2d: &Vec<Asset2d>) {
         for asset in assets_2d {
             let diffuse_texture = Texture::load(&self.device, &self.queue, &asset.0).unwrap();
 
@@ -549,21 +549,6 @@ impl Render {
             self.bind_groups_2d.push(bind_group);
         }
     }
-
-    // pub(crate) fn update_2d_buffers<R, G: Game<StaticData = R>>(
-    //     &mut self,
-    //     game: &mut G,
-    //     rules: &R,
-    //     assets_2d: &mut Asset2d,
-    // ) {
-    //     self.queue.write_buffer(
-    //         &self.hotbar_buffer,
-    //         0,
-    //         bytemuck::cast_slice(&assets_2d.verts),
-    //     );
-    //     // game.render(rules, assets_2d, &mut self.instance_groups);
-    // }
-    // don't need
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         true

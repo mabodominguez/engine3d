@@ -11,7 +11,7 @@ pub struct AnimRef(usize);
 pub struct Object2d {
     pub bg: usize,
     pub visible: bool,
-    pub verts: [VertexTwoD],
+    pub verts: [VertexTwoD; 4],
 }
 pub struct Asset2d(pub PathBuf);
 pub struct Assets {
