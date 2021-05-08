@@ -1,5 +1,6 @@
 use cgmath::num_traits::Pow;
 use cgmath::prelude::*;
+use cgmath::*;
 use rand;
 use std::iter;
 use std::ops::Range;
@@ -17,16 +18,23 @@ mod geom;
 mod model;
 mod texture;
 
+use geom::{BBox};
 use model::{DrawModel, Vertex, VertexTwoD};
 
 mod camera;
 use camera::Camera;
 mod camera_control;
 use camera_control::CameraController;
-// mod collision;
+mod player;
+use player::Player;
+mod instance_raw;
+use instance_raw::InstanceRaw;
+mod voxel;
+use voxel::{Material, Voxel, Chunk, VOXEL_HALFWIDTH, CHUNK_SIZE};
+mod particle;
+use particle::Particle;
+mod collision;
 
-const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
-const VOXEL_HALFWIDTH: f32 = 1.0; // Size of a voxel (halfwidth)
 const DT: f32 = 1.0 / 30.0;
 const WORLD_DIMS: (usize, usize, usize) = (8, 5, 8); // The number of chunks that you want to load in 3D space
 const HOTBAR_HEIGHT: f32 = 0.0;
@@ -78,97 +86,6 @@ impl Uniforms {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct InstanceRaw {
-    #[allow(dead_code)]
-    model: [[f32; 4]; 4],
-}
-
-impl InstanceRaw {
-    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-            // We need to switch from using a step mode of Vertex to Instance
-            // This means that our shaders will only change to use the next
-            // instance when the shader starts processing a new instance
-            step_mode: wgpu::InputStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    // While our vertex shader only uses locations 0, and 1 now, in later tutorials we'll
-                    // be using 2, 3, and 4, for Vertex. We'll start at slot 5 not conflict with them later
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float4,
-                },
-                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
-                // for each vec4. We don't have to do this in code though.
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 7,
-                    format: wgpu::VertexFormat::Float4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                    shader_location: 8,
-                    format: wgpu::VertexFormat::Float4,
-                },
-            ],
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Material {
-    // Enumeration to determine the material of a voxel. Is useful for differntiating them
-    Grass,
-    Dirt,
-    Iron,
-}
-
-impl Material {
-    fn strength(&self) -> i32 {
-        // Possibly useful function to determine how much time it takes to break a block
-        match *self {
-            Material::Grass => 1,
-            Material::Dirt => 2,
-            Material::Iron => 3,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Voxel {
-    // A voxel holds position and material info
-    pub center: Pos3,
-    pub material: Material,
-}
-
-// TODO: Maya helpful!!!!
-impl Voxel {
-    fn to_raw(&self) -> InstanceRaw {
-        // Turns vector position into gpu-friendly data
-        InstanceRaw {
-            model: (Mat4::from_translation(self.center.to_vec())
-                * Mat4::from_scale(VOXEL_HALFWIDTH))
-            .into(),
-        }
-    }
-}
-
-pub struct Chunk {
-    // Array that holds the vector info. It dimensions are CHUNK_SIZE^3
-    // Holds a position and the data (which is just numbers)
-    pub origin: Pos3,
-    pub data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
-}
-
 struct State {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -189,6 +106,10 @@ struct State {
     voxel_buffers: Vec<wgpu::Buffer>, // Wgpu buffer vector containing buffers for each individual type of voxel (i.e grass, ore, etc.)
     depth_texture: texture::Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
+    instance_data : Vec<Vec<InstanceRaw>>,
+    player: Player,
+    particles: Vec<Particle>,
+    contacts: collision::Contacts,
     instance_data: Vec<Vec<InstanceRaw>>,
     hotbar_buffer: wgpu::Buffer,
     hotbar_bind_group: wgpu::BindGroup,
@@ -268,7 +189,11 @@ impl State {
             znear: 0.1,
             zfar: 200.0,
         };
-        let camera_controller = CameraController::new(0.2);
+        let window_size = window.inner_size();
+        let camera_controller = CameraController::new(0.2, (window_size.width / 2) as i32, (window_size.height / 2) as i32);
+        let mut player_hitbox = BBox{center: cgmath::point3(5.0, 60.0, 5.0), halfwidth: 1.0};
+        let mut player = Player::new(player_hitbox);
+        let particles:Vec<Particle> = vec![];
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -285,34 +210,33 @@ impl State {
 
         // Create Chunks here
         // Iterate through the world chunks, and in each chunk place a random voxel
-        let vox_size = VOXEL_HALFWIDTH * 2.0; // Offset for chunks in 3D space depending on the size of the voxel size
-        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
-            [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
-        for cx in 0..WORLD_DIMS.0 {
-            for cy in 0..WORLD_DIMS.1 {
-                for cz in 0..WORLD_DIMS.2 {
-                    for x in 0..CHUNK_SIZE {
-                        for y in 0..CHUNK_SIZE {
-                            for z in 0..CHUNK_SIZE {
-                                chunk_data[x][y][z] = rng.gen_range::<usize, Range<usize>>(0..3);
+        let vox_size  = VOXEL_HALFWIDTH*2.0; // Offset for chunks in 3D space depending on the size of the voxel size
+        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] = [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]; 
+        for cx in 0..WORLD_DIMS.0{
+            for cy in 0..WORLD_DIMS.1{
+                for cz in 0..WORLD_DIMS.2{
+                    if ((cx == 0 || cx == WORLD_DIMS.0-1) || (cz == 0 || cz == WORLD_DIMS.2-1)) || (cy > 1) {
+                        for x in 0..CHUNK_SIZE {
+                            for y in 0..CHUNK_SIZE {
+                                for z in 0..CHUNK_SIZE {
+                                    chunk_data[x][y][z] = rng.gen_range::<usize, Range<usize>>(0..3);
+    
+                                }
                             }
                         }
+                        chunks.push(Chunk{
+                            origin: Pos3::new(cx as f32 * CHUNK_SIZE as f32 *  vox_size, cy as f32 * CHUNK_SIZE as f32 * -1.0 *  vox_size, 
+                                              cz as f32 * CHUNK_SIZE as f32 *  vox_size),
+                            data: chunk_data
+                        });
                     }
-                    chunks.push(Chunk {
-                        origin: Pos3::new(
-                            cx as f32 * CHUNK_SIZE as f32 * vox_size,
-                            cy as f32 * CHUNK_SIZE as f32 * -1.0 * vox_size,
-                            cz as f32 * CHUNK_SIZE as f32 * vox_size,
-                        ),
-                        data: chunk_data,
-                    });
                 }
             }
         }
         let mut voxels: Vec<Voxel> = Vec::new();
         // Turn every chunk data into a voxel. TODO: this could be made faster by just ditching the Voxel struct all together
-        for i in 0..chunks.len() {
-            voxels.append(&mut voxels_from_chunk(&chunks[i]));
+        for i in 0..chunks.len(){
+            voxels.append( &mut voxel::voxels_from_chunk(&chunks[i]));
         }
 
         let res_dir = std::path::Path::new(env!("OUT_DIR")).join("content");
@@ -553,6 +477,9 @@ impl State {
             depth_texture,
             chunks,
             instance_data,
+            player,
+            particles,
+            contacts:collision::Contacts::new(),
             hotbar_buffer,
             hotbar_bind_group,
             render_2d_pipeline,
@@ -571,10 +498,36 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         //TODO shift plane
+        self.player.process_events(event);
         self.camera_controller.process_events(event)
     }
 
     fn update(&mut self) {
+        
+        collision::update(&self.voxels, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
+        self.player.reset_blocked();
+        for collision::Contact { mtv: disp, .. } in self.contacts.block_player.iter() {
+            if disp.x > 0.0 {
+                self.player.x_neg_blocked = true;
+            }
+            if disp.x < 0.0 {
+                self.player.x_pos_blocked = true;
+            }
+            if disp.y > 0.0 {
+                self.player.y_neg_blocked = true;
+                self.player.can_jump = true;
+            }
+            if disp.y < 0.0 {
+                self.player.y_pos_blocked = true;
+            }
+            if disp.z > 0.0 {
+                self.player.z_neg_blocked = true;
+            }
+            if disp.z < 0.0 {
+                self.player.z_pos_blocked = true;
+            }
+        }
+        self.player.update(&mut self.camera);
         self.camera_controller.update_camera(&mut self.camera);
         // we ~could~ move the plane, or we could just tweak gravity.
         // this time we'll move the plane.
@@ -675,6 +628,9 @@ fn main() {
         .with_title(title)
         .build(&event_loop)
         .unwrap();
+    // grab cursor for camera
+    let _window_grab = window.set_cursor_grab(true);
+    window.set_cursor_icon(winit::window::CursorIcon::Crosshair);
     use futures::executor::block_on;
     let mut state = block_on(State::new(&window));
 
@@ -717,6 +673,7 @@ fn main() {
             }
             Event::RedrawRequested(_) => {
                 state.update();
+                let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(state.camera_controller.center_x, state.camera_controller.center_y));
                 match state.render() {
                     Ok(_) => {}
                     // Recreate the swap_chain if lost
@@ -745,26 +702,3 @@ fn main() {
     });
 }
 
-// Function to create voxels from the info matrix in a chunk
-pub fn voxels_from_chunk(chunk: &Chunk) -> Vec<Voxel> {
-    let mut voxels: Vec<Voxel> = vec![];
-    for x in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            for z in 0..CHUNK_SIZE {
-                let x_pos = (x as f32 * VOXEL_HALFWIDTH / 0.5) + chunk.origin.x;
-                let y_pos = (y as f32 * VOXEL_HALFWIDTH / 0.5) + chunk.origin.y;
-                let z_pos = (z as f32 * VOXEL_HALFWIDTH / 0.5) + chunk.origin.z;
-                let material = match chunk.data[x][y][z] {
-                    0 => Material::Dirt,
-                    1 => Material::Iron,
-                    _ => Material::Grass,
-                };
-                voxels.push(Voxel {
-                    center: Pos3::new(x_pos, y_pos, z_pos),
-                    material,
-                })
-            }
-        }
-    }
-    return voxels;
-}
