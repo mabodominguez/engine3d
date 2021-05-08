@@ -1,5 +1,5 @@
 [package]
-name = "voxels"
+name = "engine3d"
 version = "0.1.0"
 authors = ["somebody"]
 edition = "2018"
@@ -14,7 +14,7 @@ image = "0.23"
 log = "0.4"
 tobj = "2.0"
 wgpu = "0.7"
-winit = "0.22"
+winit = "0.24.0"
 rand = "0.8.3"
 
 [build-dependencies]

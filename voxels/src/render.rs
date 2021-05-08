@@ -1,6 +1,12 @@
+use crate::assets::Assets;
+use crate::camera::Camera;
+use crate::camera_control::CameraController;
+use crate::model::*;
+use crate::texture::Texture;
+use crate::voxel::{Chunk, Material, Voxel};
+use crate::Game;
 use cgmath::num_traits::Pow;
 use cgmath::prelude::*;
-use cgmath::*;
 use rand;
 use std::iter;
 use std::ops::Range;
@@ -14,48 +20,29 @@ pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
-mod geom;
-mod model;
-mod texture;
-
-use geom::{BBox};
-use model::{DrawModel, Vertex, VertexTwoD};
-
-mod camera;
-use camera::Camera;
-mod camera_control;
-use camera_control::CameraController;
-mod player;
-use player::Player;
-mod instance_raw;
-use instance_raw::InstanceRaw;
-mod voxel;
-use voxel::{Material, Voxel, Chunk, VOXEL_HALFWIDTH, CHUNK_SIZE};
-mod particle;
-use particle::Particle;
-mod collision;
-
+// TODO: make these parameters?
+const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
+const VOXEL_HALFWIDTH: f32 = 1.0; // Size of a voxel (halfwidth)
 const DT: f32 = 1.0 / 30.0;
 const WORLD_DIMS: (usize, usize, usize) = (8, 5, 8); // The number of chunks that you want to load in 3D space
 const HOTBAR_HEIGHT: f32 = 0.0;
 const HOTBAR_WIDTH: f32 = 0.0;
-
 // tl, bl, tr, br
 const HOTBAR_VERTS: &[VertexTwoD] = &[
     VertexTwoD {
-        position: [-1.0, -0.5], // make 0s -1s (x and y go from -1 to 1)
+        position: [-0.9, -0.5], // make 0s -1s (x and y go from -1 to 1)
         tex_coords: [0.0, 0.0],
     },
     VertexTwoD {
-        position: [-1.0, -1.0],
+        position: [-0.9, -0.9],
         tex_coords: [0.0, 1.0],
     },
     VertexTwoD {
-        position: [1.0, -0.5],
+        position: [0.9, -0.5],
         tex_coords: [1.0, 0.0],
     },
     VertexTwoD {
-        position: [1.0, -1.0],
+        position: [0.9, -0.9],
         tex_coords: [1.0, 1.0],
     },
 ];
@@ -85,40 +72,79 @@ impl Uniforms {
         self.view_proj = (OPENGL_TO_WGPU_MATRIX * camera.build_view_projection_matrix()).into();
     }
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct InstanceRaw {
+    #[allow(dead_code)]
+    pub(crate) model: [[f32; 4]; 4],
+}
 
-struct State {
+impl InstanceRaw {
+    pub(crate) fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
+            // We need to switch from using a step mode of Vertex to Instance
+            // This means that our shaders will only change to use the next
+            // instance when the shader starts processing a new instance
+            step_mode: wgpu::InputStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    // While our vertex shader only uses locations 0, and 1 now, in later tutorials we'll
+                    // be using 2, 3, and 4, for Vertex. We'll start at slot 5 not conflict with them later
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float4,
+                },
+                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
+                // for each vec4. We don't have to do this in code though.
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                    shader_location: 8,
+                    format: wgpu::VertexFormat::Float4,
+                },
+            ],
+        }
+    }
+}
+pub(crate) struct Render {
     surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
-    size: winit::dpi::PhysicalSize<u32>,
+    pub(crate) size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    voxel_model: model::Model,
-    camera: Camera,
-    camera_controller: CameraController,
+    pub(crate) texture_layout: wgpu::BindGroupLayout,
+    pub(crate) camera: Camera,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
-    voxels: Vec<Voxel>, // Array holding all the voxels. TODO: Don't make this hold every single voxel if we're going to expand the entire world
+    voxels: Vec<Voxel>,
+    voxel_model: Model, // Array holding all the voxels. TODO: Don't make this hold every single voxel if we're going to expand the entire world
     // rather, it should hold the voxels to be rendered
     #[allow(dead_code)]
     voxel_buffers: Vec<wgpu::Buffer>, // Wgpu buffer vector containing buffers for each individual type of voxel (i.e grass, ore, etc.)
-    depth_texture: texture::Texture,
+    depth_texture: Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
-    instance_data : Vec<Vec<InstanceRaw>>,
-    player: Player,
-    particles: Vec<Particle>,
-    contacts: collision::Contacts,
     instance_data: Vec<Vec<InstanceRaw>>,
     hotbar_buffer: wgpu::Buffer,
     hotbar_bind_group: wgpu::BindGroup,
     render_2d_pipeline: wgpu::RenderPipeline,
 }
 
-impl State {
-    async fn new(window: &Window) -> Self {
-        use rand::Rng;
+impl Render {
+    pub(crate) async fn new(window: &Window) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -189,11 +215,7 @@ impl State {
             znear: 0.1,
             zfar: 200.0,
         };
-        let window_size = window.inner_size();
-        let camera_controller = CameraController::new(0.2, (window_size.width / 2) as i32, (window_size.height / 2) as i32);
-        let mut player_hitbox = BBox{center: cgmath::point3(5.0, 60.0, 5.0), halfwidth: 1.0};
-        let mut player = Player::new(player_hitbox);
-        let particles:Vec<Particle> = vec![];
+        let camera_controller = CameraController::new(0.2);
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -203,45 +225,46 @@ impl State {
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
-
+        use rand::Rng;
         // let mut rng = rand::thread_rng();
         let mut chunks: Vec<Chunk> = Vec::new();
         let mut rng = rand::thread_rng();
 
         // Create Chunks here
         // Iterate through the world chunks, and in each chunk place a random voxel
-        let vox_size  = VOXEL_HALFWIDTH*2.0; // Offset for chunks in 3D space depending on the size of the voxel size
-        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] = [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]; 
-        for cx in 0..WORLD_DIMS.0{
-            for cy in 0..WORLD_DIMS.1{
-                for cz in 0..WORLD_DIMS.2{
-                    if ((cx == 0 || cx == WORLD_DIMS.0-1) || (cz == 0 || cz == WORLD_DIMS.2-1)) || (cy > 1) {
-                        for x in 0..CHUNK_SIZE {
-                            for y in 0..CHUNK_SIZE {
-                                for z in 0..CHUNK_SIZE {
-                                    chunk_data[x][y][z] = rng.gen_range::<usize, Range<usize>>(0..3);
-    
-                                }
+        let vox_size = VOXEL_HALFWIDTH * 2.0; // Offset for chunks in 3D space depending on the size of the voxel size
+        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
+            [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+        for cx in 0..WORLD_DIMS.0 {
+            for cy in 0..WORLD_DIMS.1 {
+                for cz in 0..WORLD_DIMS.2 {
+                    for x in 0..CHUNK_SIZE {
+                        for y in 0..CHUNK_SIZE {
+                            for z in 0..CHUNK_SIZE {
+                                chunk_data[x][y][z] = rng.gen_range::<usize, Range<usize>>(0..3);
                             }
                         }
-                        chunks.push(Chunk{
-                            origin: Pos3::new(cx as f32 * CHUNK_SIZE as f32 *  vox_size, cy as f32 * CHUNK_SIZE as f32 * -1.0 *  vox_size, 
-                                              cz as f32 * CHUNK_SIZE as f32 *  vox_size),
-                            data: chunk_data
-                        });
                     }
+                    chunks.push(Chunk {
+                        origin: Pos3::new(
+                            cx as f32 * CHUNK_SIZE as f32 * vox_size,
+                            cy as f32 * CHUNK_SIZE as f32 * -1.0 * vox_size,
+                            cz as f32 * CHUNK_SIZE as f32 * vox_size,
+                        ),
+                        data: chunk_data,
+                    });
                 }
             }
         }
         let mut voxels: Vec<Voxel> = Vec::new();
         // Turn every chunk data into a voxel. TODO: this could be made faster by just ditching the Voxel struct all together
-        for i in 0..chunks.len(){
-            voxels.append( &mut voxel::voxels_from_chunk(&chunks[i]));
+        for i in 0..chunks.len() {
+            voxels.append(&mut Chunk::voxels_from_chunk(&chunks[i]));
         }
 
         let res_dir = std::path::Path::new(env!("OUT_DIR")).join("content");
         // Create voxel model struct. This is a simple cube that's used as base for every voxel
-        let voxel_model = model::Model::load(
+        let voxel_model = Model::load(
             &device,
             &queue,
             &texture_bind_group_layout,
@@ -263,24 +286,6 @@ impl State {
             }
         }
 
-        // TODO: finish this!
-        // let mut d_instance_data: Vec<InstanceRaw> = Vec::new();
-        // d_instance_data.push(vec![
-        //     Pos2 { x: 0.0, y: 0.0 },
-        //     Pos2 {
-        //         x: HOTBAR_WIDTH,
-        //         y: 0.0,
-        //     },
-        //     Pos2 {
-        //         x: 0.0,
-        //         y: HOTBAR_HEIGHT,
-        //     },
-        //     Pos2 {
-        //         x: HOTBAR_WIDTH,
-        //         y: HOTBAR_HEIGHT,
-        //     },
-        // ]);
-
         let hotbar_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(HOTBAR_VERTS),
@@ -293,16 +298,16 @@ impl State {
         let render_2d_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render 2d Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout], // need a bind group for
+                bind_group_layouts: &[&texture_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let render_2d_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render 2d Pipeline"),
             layout: Some(&render_2d_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &vs_2d_module,          //new vs module based on new shader vert
-                entry_point: "main",            // 1.
-                buffers: &[VertexTwoD::desc()], // 2.
+                module: &vs_2d_module,
+                entry_point: "main",
+                buffers: &[VertexTwoD::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
@@ -325,7 +330,7 @@ impl State {
                 polygon_mode: wgpu::PolygonMode::Fill,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
+                format: Texture::DEPTH_FORMAT,
                 depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::Always,
                 stencil: wgpu::StencilState::default(),
@@ -377,8 +382,7 @@ impl State {
             label: Some("uniform_bind_group"),
         });
         let diffuse_path = "hotbar.png";
-        let diffuse_texture =
-            texture::Texture::load(&device, &queue, res_dir.join(diffuse_path)).unwrap();
+        let diffuse_texture = Texture::load(&device, &queue, res_dir.join(diffuse_path)).unwrap();
 
         let hotbar_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
@@ -394,20 +398,11 @@ impl State {
             ],
             label: Some("hotbar_bind_group"),
         });
-        // let hotbar_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     layout: &uniform_bind_group_layout,
-        //     entries: &[wgpu::BindGroupEntry {
-        //         binding: 0,
-        //         resource: uniform_buffer.as_entire_binding(),
-        //     }],
-        //     label: Some("uniform_bind_group"),
-        // });
 
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         // let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
-        let depth_texture =
-            texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
+        let depth_texture = Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -415,14 +410,13 @@ impl State {
                 bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
                 push_constant_ranges: &[],
             });
-        // let render_2d_pipeline = device.create_render_pipeline()
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render 3d Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &vs_module,
                 entry_point: "main",
-                buffers: &[model::ModelVertex::desc(), InstanceRaw::desc()],
+                buffers: &[ModelVertex::desc(), InstanceRaw::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fs_module,
@@ -443,7 +437,7 @@ impl State {
                 polygon_mode: wgpu::PolygonMode::Fill,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
+                format: Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
@@ -466,74 +460,45 @@ impl State {
             swap_chain,
             size,
             render_pipeline,
-            voxel_model,
+            texture_layout: texture_bind_group_layout,
             camera,
-            camera_controller,
+            uniforms,
             uniform_buffer,
             uniform_bind_group,
-            uniforms,
             voxels,
+            voxel_model,
             voxel_buffers,
             depth_texture,
             chunks,
             instance_data,
-            player,
-            particles,
-            contacts:collision::Contacts::new(),
             hotbar_buffer,
             hotbar_bind_group,
             render_2d_pipeline,
         }
     }
 
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.camera.aspect = self.sc_desc.width as f32 / self.sc_desc.height as f32;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
         self.depth_texture =
-            texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
+            Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
+        true
         //TODO shift plane
-        self.player.process_events(event);
-        self.camera_controller.process_events(event)
+        // self.camera_controller.process_events(event)
     }
 
-    fn update(&mut self) {
-        
-        collision::update(&self.voxels, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
-        self.player.reset_blocked();
-        for collision::Contact { mtv: disp, .. } in self.contacts.block_player.iter() {
-            if disp.x > 0.0 {
-                self.player.x_neg_blocked = true;
-            }
-            if disp.x < 0.0 {
-                self.player.x_pos_blocked = true;
-            }
-            if disp.y > 0.0 {
-                self.player.y_neg_blocked = true;
-                self.player.can_jump = true;
-            }
-            if disp.y < 0.0 {
-                self.player.y_pos_blocked = true;
-            }
-            if disp.z > 0.0 {
-                self.player.z_neg_blocked = true;
-            }
-            if disp.z < 0.0 {
-                self.player.z_pos_blocked = true;
-            }
-        }
-        self.player.update(&mut self.camera);
-        self.camera_controller.update_camera(&mut self.camera);
-        // we ~could~ move the plane, or we could just tweak gravity.
-        // this time we'll move the plane.
-    }
-
-    fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
+    pub(crate) fn render<R, G: Game<StaticData = R>>(
+        &mut self,
+        game: &mut G,
+        rules: &R,
+        assets: &mut Assets,
+    ) -> Result<(), wgpu::SwapChainError> {
         // Update buffers based on dynamics
         // TODO: This is a repeated line of code, but I needed to have it here to make sure everything works
         //       We could just put the data into the struct so we avoid iterating a whole bunch of times
@@ -618,87 +583,3 @@ impl State {
         Ok(())
     }
 }
-
-fn main() {
-    use std::time::Instant;
-    env_logger::init();
-    let event_loop = EventLoop::new();
-    let title = env!("CARGO_PKG_NAME");
-    let window = winit::window::WindowBuilder::new()
-        .with_title(title)
-        .build(&event_loop)
-        .unwrap();
-    // grab cursor for camera
-    let _window_grab = window.set_cursor_grab(true);
-    window.set_cursor_icon(winit::window::CursorIcon::Crosshair);
-    use futures::executor::block_on;
-    let mut state = block_on(State::new(&window));
-
-    // How many frames have we simulated?
-    let mut frame_count: usize = 0;
-    // How many unsimulated frames have we saved up?
-    let mut available_time: f32 = 0.0;
-    let mut since = Instant::now();
-
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-        match event {
-            Event::MainEventsCleared => window.request_redraw(),
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == window.id() => {
-                if !state.input(event) {
-                    match event {
-                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                        WindowEvent::KeyboardInput { input, .. } => match input {
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            } => {
-                                *control_flow = ControlFlow::Exit;
-                            }
-                            _ => {}
-                        },
-                        WindowEvent::Resized(physical_size) => {
-                            state.resize(*physical_size);
-                        }
-                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            state.resize(**new_inner_size);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Event::RedrawRequested(_) => {
-                state.update();
-                let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(state.camera_controller.center_x, state.camera_controller.center_y));
-                match state.render() {
-                    Ok(_) => {}
-                    // Recreate the swap_chain if lost
-                    Err(wgpu::SwapChainError::Lost) => state.resize(state.size),
-                    // The system is out of memory, we should probably quit
-                    Err(wgpu::SwapChainError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    // All other errors (Outdated, Timeout) should be resolved by the next frame
-                    Err(e) => eprintln!("{:?}", e),
-                }
-                // The renderer "produces" time...
-                available_time += since.elapsed().as_secs_f32();
-                since = Instant::now();
-            }
-            _ => {}
-        }
-        // And the simulation "consumes" it
-        while available_time >= DT {
-            // Eat up one frame worth of time
-            available_time -= DT;
-
-            state.update();
-
-            // Increment the frame counter
-            //frame_count += 1;
-        }
-    });
-}
-
