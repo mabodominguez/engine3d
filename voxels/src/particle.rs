@@ -1,4 +1,4 @@
-use crate::InstanceRaw;
+use crate::instance_raw::InstanceRaw;
 use crate::geom::{Mat4, Vec3, Pos3, Sphere};
 use super::{DT};
 use cgmath::EuclideanSpace;

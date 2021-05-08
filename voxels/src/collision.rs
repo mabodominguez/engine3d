@@ -1,5 +1,5 @@
-use crate::Voxel;
-use crate::Particle;
+use crate::voxel::Voxel;
+use crate::particle::Particle;
 use crate::geom::*;
 
 #[derive(Clone, Copy, Debug)]
