@@ -15,7 +15,7 @@ pub struct Game1 {
 }
 pub enum Rule {
     Title,
-    Play(usize), // what part of the inventory
+    Play(u8), // what part of the inventory
     End,
 }
 impl Game for Game1 {
@@ -29,7 +29,7 @@ impl Game for Game1 {
             },
             chunks: vec![],
         };
-        return (game, Rule::Play);
+        return (game, Rule::Play(1));
     }
     fn update(&mut self, rules: &Self::StaticData, engine: &mut Engine) {
         match rules {
@@ -77,7 +77,7 @@ impl Game for Game1 {
                 // Change this with new camera code and stuff
                 // engine.camera_controller.update_camera(&mut engine.render.camera);
                 // render hot bar and stuff? change assets unclear
-                engine.render.input(&engine.events);
+                engine.render.input(&engine.events, *i);
                 engine.render.update();
             }
             Rule::End => {
@@ -90,7 +90,7 @@ impl Game for Game1 {
         match rules {
             Rule::Title => {
             }
-            Rule::Play => {
+            Rule::Play(i) => {
             }
             Rule::End => {
             }

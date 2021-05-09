@@ -3,29 +3,25 @@ use crate::camera::Camera;
 use crate::camera_control::CameraController;
 use crate::model::*;
 use crate::texture::Texture;
-use crate::voxel::{Chunk, Material, Voxel};
+use crate::voxel::*;
+use crate::world_gen::*;
+use crate::coordinates::*;
 use crate::Game;
+use crate::model::Model;
 use crate::Events;
-use cgmath::num_traits::Pow;
 use cgmath::prelude::*;
-use rand;
 use std::iter;
-use std::ops::Range;
 use wgpu::util::DeviceExt;
 use winit::{
-    event::*,
-    event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
 pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
-// TODO: make these parameters?
-const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
-const VOXEL_HALFWIDTH: f32 = 1.0; // Size of a voxel (halfwidth)
-const DT: f32 = 1.0 / 30.0;
-const WORLD_DIMS: (usize, usize, usize) = (8, 5, 8); // The number of chunks that you want to load in 3D space
+pub const DT: f32 = 1.0 / 30.0;
+
+
 const HOTBAR_HEIGHT: f32 = 0.0;
 const HOTBAR_WIDTH: f32 = 0.0;
 // tl, bl, tr, br
@@ -58,6 +54,13 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 
 #[derive(Copy, Clone)]
 pub struct TwoDID(usize, usize, bool);
+
+pub struct ChunkRender {
+    instance_data: Vec<Vec<InstanceRaw>>,
+    buffers: Vec<wgpu::Buffer>,
+}
+
+
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -129,20 +132,18 @@ pub struct Render {
     swap_chain: wgpu::SwapChain,
     pub(crate) size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
+    voxel_model: Model,
     pub(crate) texture_layout: wgpu::BindGroupLayout,
     pub(crate) camera: Camera,
     pub camera_controller: CameraController,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
-    voxels: Vec<Voxel>,
-    voxel_model: Model, // Array holding all the voxels. TODO: Don't make this hold every single voxel if we're going to expand the entire world
-    // rather, it should hold the voxels to be rendered
-    #[allow(dead_code)]
-    voxel_buffers: Vec<wgpu::Buffer>, // Wgpu buffer vector containing buffers for each individual type of voxel (i.e grass, ore, etc.)
     depth_texture: Texture,
     chunks: Vec<Chunk>, // chunks in the world (or to be rendered. TBD)
-    instance_data: Vec<Vec<InstanceRaw>>,
+    dynamic_chunks: Vec<ChunkRender>,
+    current_chunk: isize,
+    dynamic_center: usize,
     buffers_2d: Vec<wgpu::Buffer>,
     bind_groups_2d: Vec<wgpu::BindGroup>,
     pub(crate) objects_2d: Vec<TwoDID>,
@@ -215,8 +216,8 @@ impl Render {
             });
 
         let camera = Camera {
-            eye: (0.0, 5.0, -10.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
+            eye: (0.0, 0.0, 0.0).into(),
+            target: (1.0, 1.0, 1.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: sc_desc.width as f32 / sc_desc.height as f32,
             fovy: 45.0,
@@ -233,44 +234,11 @@ impl Render {
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
-        use rand::Rng;
-        // let mut rng = rand::thread_rng();
-        let mut chunks: Vec<Chunk> = Vec::new();
-        let mut rng = rand::thread_rng();
 
-        // Create Chunks here
-        // Iterate through the world chunks, and in each chunk place a random voxel
-        let vox_size = VOXEL_HALFWIDTH * 2.0; // Offset for chunks in 3D space depending on the size of the voxel size
-        let mut chunk_data: [[[usize; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
-            [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
-        for cx in 0..WORLD_DIMS.0 {
-            for cy in 0..WORLD_DIMS.1 {
-                for cz in 0..WORLD_DIMS.2 {
-                    for x in 0..CHUNK_SIZE {
-                        for y in 0..CHUNK_SIZE {
-                            for z in 0..CHUNK_SIZE {
-                                chunk_data[x][y][z] = rng.gen_range::<usize, Range<usize>>(0..3);
-                            }
-                        }
-                    }
-                    chunks.push(Chunk {
-                        origin: Pos3::new(
-                            cx as f32 * CHUNK_SIZE as f32 * vox_size,
-                            cy as f32 * CHUNK_SIZE as f32 * -1.0 * vox_size,
-                            cz as f32 * CHUNK_SIZE as f32 * vox_size,
-                        ),
-                        data: chunk_data,
-                    });
-                }
-            }
-        }
-        let mut voxels: Vec<Voxel> = Vec::new();
-        // Turn every chunk data into a voxel. TODO: this could be made faster by just ditching the Voxel struct all together
-        for i in 0..chunks.len() {
-            voxels.append(&mut Chunk::voxels_from_chunk(&chunks[i]));
-        }
-
+        let chunks = make_world();
+   
         let res_dir = std::path::Path::new(env!("OUT_DIR")).join("content");
+     
         // Create voxel model struct. This is a simple cube that's used as base for every voxel
         let voxel_model = Model::load(
             &device,
@@ -280,21 +248,22 @@ impl Render {
         )
         .unwrap();
 
-        // Individual data arrays that hold data about each material
-        let mut instance_data: Vec<Vec<InstanceRaw>> = Vec::new();
-        for _ in 0..voxel_model.materials.len() {
-            instance_data.push(Vec::new());
+        // Create Dynamic Chunks
+        let mut dynamic_chunks: Vec<ChunkRender> = Vec::with_capacity(chunks.len() - 1);
+        for i in 0..(4*RENDER_RADIUS.0.pow(2)*RENDER_RADIUS.1){
+            dynamic_chunks.push(chunk_to_raw(
+                voxel_model.materials.len(),
+                &device,
+                &chunks[i],
+                i,
+            ))
         }
+
+
         let buffers_2d = vec![];
         let bind_groups_2d = vec![];
         let objects_2d = vec![];
-        for i in 0..voxels.len() {
-            match voxels[i].material {
-                Material::Grass => instance_data[0].push(voxels[i].to_raw()),
-                Material::Dirt => instance_data[1].push(voxels[i].to_raw()),
-                Material::Iron => instance_data[2].push(voxels[i].to_raw()),
-            }
-        }
+
         let hotbar_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(HOTBAR_VERTS),
@@ -353,19 +322,6 @@ impl Render {
                 alpha_to_coverage_enabled: false, // 4.
             },
         });
-
-        // Push data into unique buffers so we know what material to use
-        // TODO: This might not be super necessary, because the raw data is just a bunch of positions
-        let mut voxel_buffers: Vec<wgpu::Buffer> = Vec::new();
-        for i in 0..instance_data.len() {
-            voxel_buffers.push(
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(&i.to_string()),
-                    contents: bytemuck::cast_slice(&instance_data[i]),
-                    usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
-                }),
-            );
-        }
 
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -470,17 +426,17 @@ impl Render {
             size,
             render_pipeline,
             texture_layout: texture_bind_group_layout,
+            voxel_model,
             camera,
             camera_controller,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
-            voxels,
-            voxel_model,
-            voxel_buffers,
             depth_texture,
-            chunks,
-            instance_data,
+            chunks, // chunks in the world (or to be rendered. TBD)
+            dynamic_chunks,
+            current_chunk: 0,
+            dynamic_center: 0,
             buffers_2d,
             bind_groups_2d,
             objects_2d,
@@ -553,9 +509,19 @@ impl Render {
         }
     }
 
-    fn input(&mut self, event: &Events) -> bool {
+    pub fn input(&mut self, event: &Events, selected_block: u8) -> bool {
         //TODO shift plane
-        self.camera_controller.process_events(events);
+        self.camera_controller.process_events(event);
+        let new_index = world_to_chunk(self.camera.eye).0 as isize;
+        if self.current_chunk != new_index {
+            self.current_chunk = new_index;
+            self.change_render();
+        }
+        if event.mouse_pressed(0){
+            self.left_click();
+        } else if event.mouse_pressed(1){
+            self.right_click(selected_block);
+        }
         true
     }
 
@@ -570,20 +536,16 @@ impl Render {
         assets: &mut Assets,
     ) -> Result<(), wgpu::SwapChainError> {
         // Update buffers based on dynamics
-        // TODO: This is a repeated line of code, but I needed to have it here to make sure everything works
-        //       We could just put the data into the struct so we avoid iterating a whole bunch of times
-        //       The only thing that worries me is how we're going to handle updating voxels in a single chunk efficiently
-        //       In the future, we could just update data on the current chunk that the player is standing every frame, while we don't worry
-        //       about chunks that are further away
-        // Individual data arrays that hold data about each material
 
         // Add buffers to the queue
-        for i in 0..self.instance_data.len() {
-            self.queue.write_buffer(
-                &self.voxel_buffers[i],
-                0,
-                bytemuck::cast_slice(&self.instance_data[i]),
-            );
+        for i in 0..self.dynamic_chunks.len() {
+            for j in 0..self.dynamic_chunks[i].instance_data.len() {
+                self.queue.write_buffer(
+                    &self.dynamic_chunks[i].buffers[j],
+                    0,
+                    bytemuck::cast_slice(&self.dynamic_chunks[i].instance_data[j]),
+                );
+            }
         }
 
         self.uniforms.update_view_proj(&self.camera);
@@ -630,14 +592,16 @@ impl Render {
 
             // Render each voxel buffer, passing information about the material that we're using (the last argument in the function call)
             // Materials info is stored in  "cube.mtl"
-            for i in 0..self.instance_data.len() {
-                render_pass.set_vertex_buffer(1, self.voxel_buffers[i].slice(..));
-                render_pass.draw_voxels(
-                    &self.voxel_model,
-                    0..self.instance_data[i].len() as u32,
-                    &self.uniform_bind_group,
-                    i,
-                );
+            for i in 0..self.dynamic_chunks.len() {
+                for j in 0..self.dynamic_chunks[i].instance_data.len() {
+                    render_pass.set_vertex_buffer(1, self.dynamic_chunks[i].buffers[j].slice(..));
+                    render_pass.draw_chunk(
+                        &self.voxel_model,
+                        &self.uniform_bind_group,
+                        0..self.dynamic_chunks[i].instance_data[j].len() as u32,
+                        j,
+                    );
+                }
             }
             // set 2d pipeline, make sure texture is updated, provide a texture bindgroup
             // call draw on what vertices to draw
@@ -656,5 +620,272 @@ impl Render {
         self.queue.submit(iter::once(encoder.finish()));
 
         Ok(())
+    }
+
+    fn left_click(&mut self){
+        let forward = self.camera.target - self.camera.eye;
+        for length in 0..6 {
+            let (i, (x, y, z)) = world_to_chunk(
+                self.camera.eye
+                    + (forward.normalize()
+                        * VOXEL_HALFWIDTH
+                        * (2.0 * length as f32 + 0.1)),
+            );
+            if self.chunks[i].data[x][y][z] == 7 {
+                break;
+            }
+            if self.chunks[i].data[x][y][z] != 0  {
+                let difference = i as isize - self.current_chunk;
+                if difference == 0 {
+                    self.chunks[i].data[x][y][z] = 0;
+                    self.dynamic_chunks[self.dynamic_center] = chunk_to_raw(
+                        self.voxel_model.materials.len(),
+                        &self.device,
+                        &self.chunks[i],
+                        i,
+                    );
+                } else if difference % (WORLD_DIMS.1 * WORLD_DIMS.2) as isize == 0 { // Difference is in X
+                    self.chunks[i].data[x][y][z] = 0;
+                    let offset = (4*RENDER_RADIUS.1 *RENDER_RADIUS.0) as isize *difference.signum();
+                    self.dynamic_chunks[ (self.dynamic_center as isize + offset) as usize] = chunk_to_raw(
+                        self.voxel_model.materials.len(),
+                        &self.device,
+                        &self.chunks[i],
+                        i,
+                    );
+                } else if difference % WORLD_DIMS.2 as isize == 0 { // DIfference is in Y
+                    self.chunks[i].data[x][y][z] = 0;
+                    let offset = (2*RENDER_RADIUS.0) as isize * difference.signum();
+                    self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize ] = chunk_to_raw(
+                        self.voxel_model.materials.len(),
+                        &self.device,
+                        &self.chunks[i],
+                        i,
+                    );
+                } else {
+                    self.chunks[i].data[x][y][z] = 0;
+                    let offset = difference.signum();
+                    self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize ] = chunk_to_raw(
+                        self.voxel_model.materials.len(),
+                        &self.device,
+                        &self.chunks[i],
+                        i,
+                    );
+                }
+                break;
+            }
+        }
+    }
+
+    fn right_click(&mut self, selected_block: u8){
+        let forward = self.camera.target - self.camera.eye;
+        for length in 2..7 {
+            let (i, (x, y, z)) = world_to_chunk(
+                self.camera.eye
+                    + (forward.normalize()
+                        * VOXEL_HALFWIDTH
+                        * (2.0 * length as f32 + 0.1)),
+            );
+            let (place_i, (px,py,pz)) = world_to_chunk(
+                self.camera.eye
+                    + (forward.normalize()
+                        * VOXEL_HALFWIDTH
+                        * (2.0 * (length - 1) as f32 + 0.1)),
+            );
+
+            // If we have an empty voxel, then place stuff
+            if self.chunks[i].data[x][y][z] != 0 {
+                if  self.chunks[place_i].data[px][py][pz] == 0 {
+                    let difference = place_i as isize - self.current_chunk;
+                    if difference == 0 {
+                        self.chunks[place_i].data[px][py][pz] = selected_block;
+                        self.dynamic_chunks[self.dynamic_center] = chunk_to_raw(
+                            self.voxel_model.materials.len(),
+                            &self.device,
+                            &self.chunks[i],
+                            i,
+                        );
+                    } else if difference % (WORLD_DIMS.1 * WORLD_DIMS.2) as isize == 0 { // Difference is in X
+                        self.chunks[place_i].data[px][py][pz] = 1; // TODO: SELECTED BLOCK
+                        let offset = (4*RENDER_RADIUS.1 *RENDER_RADIUS.0) as isize *difference.signum();
+                        self.dynamic_chunks[ (self.dynamic_center as isize + offset) as usize] = chunk_to_raw(
+                            self.voxel_model.materials.len(),
+                            &self.device,
+                            &self.chunks[i],
+                            i,
+                        );
+                    } else if difference % WORLD_DIMS.2 as isize == 0 { // DIfference is in Y
+                        self.chunks[place_i].data[px][py][pz] = 1; // TODO: SELECTED BLOCK
+                        let offset = (2*RENDER_RADIUS.0) as isize * difference.signum();
+                        self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize ] = chunk_to_raw(
+                            self.voxel_model.materials.len(),
+                            &self.device,
+                            &self.chunks[i],
+                            i,
+                        );
+                    } else {
+                        self.chunks[place_i].data[px][py][pz] = 1; // TODO: SELECTED BLOCK
+                        let offset = difference.signum();
+                        self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize ] = chunk_to_raw(
+                            self.voxel_model.materials.len(),
+                            &self.device,
+                            &self.chunks[i],
+                            i,
+                        );
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    fn change_render(&mut self) {
+        // Determine the startspot for our chunk
+        let (x, y, z) = index_to_world(self.current_chunk as usize);
+        // Set the start and end variables for our iteration 
+        // X
+        let x_start = x as isize - RENDER_RADIUS.0 as isize;
+        let x_end = (x_start + (RENDER_RADIUS.0 as isize) * 2) as usize;
+        let x_start = (x_start).clamp(
+            0,
+            WORLD_DIMS.0 as isize - (RENDER_RADIUS.0 * 2 + 1) as isize,
+        ) as usize;
+        
+        // Y
+        let y_start = y as isize - RENDER_RADIUS.1 as isize;
+        let y_end = (y_start + RENDER_RADIUS.1 as isize * 2) as usize;
+        let y_start = (y_start).clamp(
+            0,
+            WORLD_DIMS.1 as isize - (RENDER_RADIUS.1 * 2 + 1) as isize,
+        ) as usize;
+        
+        // // Z
+        let z_start = z as isize - RENDER_RADIUS.0 as isize;
+        let z_end = (z_start + RENDER_RADIUS.0 as isize * 2) as usize;
+        let z_start = (z_start as isize).clamp(
+            0,
+            WORLD_DIMS.2 as isize - (RENDER_RADIUS.0 * 2 + 1) as isize,
+        ) as usize;
+        
+        let mut dynamic_chunks: Vec<ChunkRender> = Vec::with_capacity((2 *RENDER_RADIUS.0 + 1).pow(2)*(2* RENDER_RADIUS.1 + 1));
+        let mut center: usize = 0;
+        for world_x  in x_start..(x_end + 1) {
+            let x = world_x * WORLD_DIMS.1 * WORLD_DIMS.2;
+            for world_y in y_start..(y_end +1){
+                    let y = world_y * WORLD_DIMS.2;
+                for world_z in z_start..(z_end +1){
+                    let index = (x + y + world_z).clamp(0, WORLD_DIMS.0*WORLD_DIMS.1*WORLD_DIMS.2 - 1 );
+                    if index == self.current_chunk as usize {
+                        self.dynamic_center = center;
+                    } else {
+                        center += 1;
+                    }
+                     dynamic_chunks.push(chunk_to_raw(
+                        self.voxel_model.materials.len(),
+                        &self.device,
+                        &self.chunks[index],
+                        index,
+                    ))
+                }
+            }
+        }
+
+        self.dynamic_chunks = dynamic_chunks;
+
+    }
+
+}
+
+
+
+
+fn chunk_to_raw(mat_count: usize, device: &wgpu::Device, chunk: &Chunk, i: usize) -> ChunkRender {
+    let mut instance_data: Vec<Vec<InstanceRaw>> = Vec::new();
+    for _ in 0..mat_count {
+        instance_data.push(Vec::new());
+    }
+
+    let mut buffers: Vec<wgpu::Buffer> = Vec::new();
+
+    let mut mesh: [[[bool; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
+        [[[false; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+
+    let chunk_scale = (VOXEL_HALFWIDTH * 2.0) as usize * CHUNK_SIZE;
+    let origin_x = (i / (WORLD_DIMS.1 * WORLD_DIMS.2) * chunk_scale) as f32;
+    let origin_y = ((i % (WORLD_DIMS.1 * WORLD_DIMS.2)) / WORLD_DIMS.2 * chunk_scale) as f32;
+    let origin_z = ((i % (WORLD_DIMS.1 * WORLD_DIMS.2)) % WORLD_DIMS.2 * chunk_scale) as f32;
+
+    for x in 0..CHUNK_SIZE as usize {
+        for y in 0..CHUNK_SIZE as usize {
+            for z in 0..CHUNK_SIZE as usize {
+                let voxel = chunk.data[x][y][z];
+                // ADD MESHING HERE
+                if x != 0
+                    && (x + 1) != CHUNK_SIZE
+                    && y != 0
+                    && (y + 1) != CHUNK_SIZE
+                    && z != 0
+                    && (z + 1) != CHUNK_SIZE
+                {
+                    if voxel == 0 {
+                        mesh[x + 1][y][z] = true;
+                        mesh[x - 1][y][z] = true;
+                        mesh[x][y + 1][z] = true;
+                        mesh[x][y - 1][z] = true;
+                        mesh[x][y][z + 1] = true;
+                        mesh[x][y][z - 1] = true;
+                    }
+                } else {
+                    mesh[x][y][z] = true;
+                    if voxel == 0 {
+                        mesh[(x + 1).clamp(0, CHUNK_SIZE - 1) as usize][y][z] = true;
+                        mesh[(x as i32 - 1).clamp(0, CHUNK_SIZE as i32 - 1) as usize][y][z] = true;
+                        mesh[x][(y + 1).clamp(0, CHUNK_SIZE - 1) as usize][z] = true;
+                        mesh[x][(y as i32 - 1).clamp(0, CHUNK_SIZE as i32 - 1) as usize][z] = true;
+                        mesh[x][y][(z + 1).clamp(0, CHUNK_SIZE - 1) as usize] = true;
+                        mesh[x][y][(z as i32 - 1).clamp(0, CHUNK_SIZE as i32 - 1) as usize] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    for x in 0..CHUNK_SIZE as usize {
+        let x_pos = (x as f32 * VOXEL_HALFWIDTH / 0.5) + origin_x;
+
+        for y in 0..CHUNK_SIZE as usize {
+            let y_pos = (y as f32 * VOXEL_HALFWIDTH / 0.5) + origin_y;
+
+            for z in 0..CHUNK_SIZE as usize {
+                let z_pos = (z as f32 * VOXEL_HALFWIDTH / 0.5) + origin_z;
+
+                if mesh[x][y][z] && (chunk.data[x][y][z] != 0) {
+                    let center = Pos3::new(
+                        x_pos + VOXEL_HALFWIDTH,
+                        y_pos + VOXEL_HALFWIDTH,
+                        z_pos + VOXEL_HALFWIDTH,
+                    );
+                    instance_data[chunk.data[x][y][z] as usize - 1].push(InstanceRaw {
+                        model: (Mat4::from_translation(center.to_vec())
+                            * Mat4::from_scale(VOXEL_HALFWIDTH))
+                        .into(),
+                    });
+                }
+            }
+        }
+    }
+
+    for i in 0..instance_data.len() {
+        buffers.push(
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&i.to_string()),
+                contents: bytemuck::cast_slice(&instance_data[i]),
+                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+            }),
+        );
+    }
+    ChunkRender {
+        instance_data,
+        buffers,
     }
 }

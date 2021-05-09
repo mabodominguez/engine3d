@@ -195,12 +195,11 @@ where
         uniforms: &'b wgpu::BindGroup,
     );
 
-    fn draw_voxels(
-        // Custom function to render voxels given the texture information
+    fn draw_chunk(
         &mut self,
         model: &'b Model,
-        instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances: Range<u32>,
         tex: usize,
     );
 }
@@ -243,12 +242,11 @@ where
         }
     }
 
-    fn draw_voxels(
-        // Custom function to render voxels given the texture information
+    fn draw_chunk(
         &mut self,
         model: &'b Model,
-        instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
+        instances: Range<u32>,
         tex: usize,
     ) {
         for mesh in &model.meshes {

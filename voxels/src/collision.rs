@@ -1,4 +1,3 @@
-use crate::voxel::Voxel;
 use crate::particle::Particle;
 use crate::geom::*;
 
@@ -33,49 +32,49 @@ impl Contacts {
     }
 }
 
-fn restitute(voxels: &[Voxel], player: &mut BBox, particles: &mut [Particle], contacts: &mut Contacts) {
-    contacts.sort();
-    for c in contacts.block_player.iter_mut() {
-        if let Some(disp) = disp_box_box(&voxels[c.a].get_bbox(), player) {
-            let x = c.mtv.x;
-            let y = c.mtv.y;
-            let z = c.mtv.z;
-            if y <= x && y <= z {
-                player.center.y += y / 2.0;
-                c.mtv.x = 0.0;
-                c.mtv.z = 0.0;
-            } else if x <= y && x <= z {
-                player.center.x += x / 2.0;
-                c.mtv.y = 0.0;
-                c.mtv.z = 0.0;
-            } else {
-                player.center.z += z / 2.0;
-                c.mtv.x = 0.0;
-                c.mtv.y = 0.0;
-            }
-        }
+// fn restitute(voxels: &[Voxel], player: &mut BBox, particles: &mut [Particle], contacts: &mut Contacts) {
+//     contacts.sort();
+//     for c in contacts.block_player.iter_mut() {
+//         if let Some(disp) = disp_box_box(&voxels[c.a].get_bbox(), player) {
+//             let x = c.mtv.x;
+//             let y = c.mtv.y;
+//             let z = c.mtv.z;
+//             if y <= x && y <= z {
+//                 player.center.y += y / 2.0;
+//                 c.mtv.x = 0.0;
+//                 c.mtv.z = 0.0;
+//             } else if x <= y && x <= z {
+//                 player.center.x += x / 2.0;
+//                 c.mtv.y = 0.0;
+//                 c.mtv.z = 0.0;
+//             } else {
+//                 player.center.z += z / 2.0;
+//                 c.mtv.x = 0.0;
+//                 c.mtv.y = 0.0;
+//             }
+//         }
         
-    }
-    for c in contacts.particle_block.iter() {
-        //todo
-    }
-}
+//     }
+//     for c in contacts.particle_block.iter() {
+//         //todo
+//     }
+// }
 
-pub fn update(voxels: &[Voxel], player: &mut BBox, particles: &mut [Particle], contacts: &mut Contacts) {
-    contacts.clear();
-    gather_contacts1(voxels, player, contacts);
-    restitute(voxels, player, particles, contacts);
-}
+// pub fn update(voxels: &[Voxel], player: &mut BBox, particles: &mut [Particle], contacts: &mut Contacts) {
+//     contacts.clear();
+//     gather_contacts1(voxels, player, contacts);
+//     restitute(voxels, player, particles, contacts);
+// }
 
-fn gather_contacts1(voxels: &[Voxel], player: &mut BBox, into: &mut Contacts) { //probably check per chunk first
-    // collide player against voxels
-    for (ai, a) in voxels.iter().enumerate() {
-        if let Some(disp) = disp_box_box(&a.get_bbox(), player) {
-            into.block_player.push(Contact {
-                a: ai,
-                b: 0,
-                mtv: disp,
-            });
-        }
-    }
-}
+// fn gather_contacts1(voxels: &[Voxel], player: &mut BBox, into: &mut Contacts) { //probably check per chunk first
+//     // collide player against voxels
+//     for (ai, a) in voxels.iter().enumerate() {
+//         if let Some(disp) = disp_box_box(&a.get_bbox(), player) {
+//             into.block_player.push(Contact {
+//                 a: ai,
+//                 b: 0,
+//                 mtv: disp,
+//             });
+//         }
+//     }
+// }

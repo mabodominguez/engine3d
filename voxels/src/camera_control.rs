@@ -49,7 +49,7 @@ impl CameraController {
     }
 
     pub fn update_camera(&mut self, camera: &mut Camera) {
-        let mut forward = camera.target - camera.eye;
+        let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
 
@@ -64,11 +64,11 @@ impl CameraController {
              camera.target -= forward_norm * self.speed;
         }
 
-        let right = forward_norm.cross(camera.up);
+        // let right = forward_norm.cross(camera.up);
 
         // Redo radius calc in case the up/ down is pressed.
         let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
+        // let forward_mag = forward.magnitude();
 
         if self.is_right_pressed {
             // Rescale the distance between the target and eye so

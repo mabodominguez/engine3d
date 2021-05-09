@@ -21,6 +21,9 @@ use events::Events;
 pub mod render;
 use render::Render;
 pub mod assets;
+pub mod world_gen;
+pub mod coordinates;
+pub mod save;
 
 use assets::{Asset2d, Assets, Object2d};
 
