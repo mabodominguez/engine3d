@@ -9,6 +9,7 @@ use crate::voxel::*;
 use crate::world_gen::*;
 use crate::Events;
 use crate::Game;
+use crate::Sound;
 use cgmath::prelude::*;
 use std::iter;
 use wgpu::util::DeviceExt;
@@ -145,10 +146,11 @@ pub struct Render {
     hotbar_buffer: wgpu::Buffer,
     hotbar_bind_group: wgpu::BindGroup,
     render_2d_pipeline: wgpu::RenderPipeline,
+    pub sound: Sound,
 }
 
 impl Render {
-    pub(crate) async fn new(window: &Window) -> Self {
+    pub(crate) async fn new(window: &Window, sound: Sound) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -445,6 +447,7 @@ impl Render {
             hotbar_buffer,
             hotbar_bind_group,
             render_2d_pipeline,
+            sound,
         }
     }
 
@@ -637,7 +640,14 @@ impl Render {
             }
             if self.chunks[i].data[x][y][z] != 0 {
                 let difference = i as isize - self.current_chunk;
+                let selected_block = self.chunks[i].data[x][y][z];
+                    if selected_block == 1 || selected_block == 2 {
+                        self.sound.play_sound("dirt".to_string());
+                    } else {
+                        self.sound.play_sound("stone".to_string());
+                    }
                 if difference == 0 {
+                    
                     self.chunks[i].data[x][y][z] = 0;
                     self.dynamic_chunks[self.dynamic_center] = chunk_to_raw(
                         self.voxel_model.materials.len(),
@@ -742,6 +752,11 @@ impl Render {
                                 i,
                             );
                     }
+                }
+                if selected_block == 1 || selected_block == 2 {
+                    self.sound.play_sound("dirt".to_string());
+                } else {
+                    self.sound.play_sound("stone".to_string());
                 }
                 break;
             }

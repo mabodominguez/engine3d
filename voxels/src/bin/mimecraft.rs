@@ -47,6 +47,9 @@ impl Game for Game1 {
             contacts: Contacts::new(),
             particles: vec![],
         };
+        engine.render.sound.add_sound("bgm".to_string(), "../content/backgroundmusic.mp3".to_string());
+        engine.render.sound.add_sound("dirt".to_string(), "../content/dirt.mp3".to_string());
+        engine.render.sound.add_sound("stone".to_string(), "../content/stone.mp3".to_string());
         let bind_groups = vec![
             engine3d::assets::Asset2d(
                 std::path::Path::new(env!("OUT_DIR"))
@@ -176,10 +179,12 @@ impl Game for Game1 {
                     engine.render.chunks = engine3d::save::load();
                     // start gameplay
                     *rules = Rule::Play(1);
+                    engine.render.sound.play_sound("bgm".to_string());
                     engine.render.objects_2d[0].2 = false;
                 }
                 if engine.events.key_pressed(KeyCode::Space) {
                     *rules = Rule::Play(1);
+                    engine.render.sound.play_sound("bgm".to_string());
                     engine.render.objects_2d[0].2 = false;
                     // change rule to play
                 }

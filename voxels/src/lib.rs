@@ -25,6 +25,8 @@ use render::Render;
 pub mod assets;
 pub mod world_gen;
 pub mod save;
+pub mod sound;
+use sound::Sound;
 
 use assets::{Asset2d, Assets, Object2d};
 
@@ -91,7 +93,9 @@ pub fn run<R, G: Game<StaticData = R>>(
     window.set_cursor_icon(winit::window::CursorIcon::Crosshair);
     let assets = Assets::new(asset_root);
     use futures::executor::block_on;
-    let render = block_on(Render::new(&window));
+    let mut game_sound = Sound::new();
+    let _ = game_sound.init_manager();
+    let render = block_on(Render::new(&window, game_sound));
     let events = Events::default();
     let mut engine = Engine {
         assets,
