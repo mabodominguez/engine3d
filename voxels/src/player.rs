@@ -61,6 +61,8 @@ impl Player {
         return self.hitbox.center;
     }
     pub fn change_pos(&mut self, x: f32, y: f32, z: f32) {
+        // println!("{}", self.x_pos_blocked);
+        // println!("{}", self.z_pos_blocked);
         if (x > 0.0 && !self.x_pos_blocked) || (x < 0.0 && !self.x_neg_blocked) {
             self.hitbox.center.x += x;
         }
@@ -72,7 +74,7 @@ impl Player {
         }
     }
     pub fn process_contacts(&mut self, contacts:&Vec<Contact<usize>>) {
-        self.reset_blocked();
+        //self.reset_blocked();
         for Contact { mtv: disp, .. } in contacts.iter() {
             if disp.x > 0.0 {
                 self.x_neg_blocked = true;
@@ -80,17 +82,17 @@ impl Player {
             if disp.x < 0.0 {
                 self.x_pos_blocked = true;
             }
-            if disp.y > 0.0 {
+            if disp.y < 0.0 {
                 self.y_neg_blocked = true;
                 self.can_jump = true;
             }
-            if disp.y < 0.0 {
+            if disp.y > 0.0 {
                 self.y_pos_blocked = true;
             }
-            if disp.z > 0.0 {
+            if disp.z < 0.0 {
                 self.z_neg_blocked = true;
             }
-            if disp.z < 0.0 {
+            if disp.z > 0.0 {
                 self.z_pos_blocked = true;
             }
         }

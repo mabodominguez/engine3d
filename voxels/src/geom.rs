@@ -57,12 +57,21 @@ pub fn disp_box_box(b1: &BBox, b2: &BBox) -> Option<Vec3> {
     let mut z_overlap = 0.0;
     if !((b1.halfwidth + b2.halfwidth) < (b1.center.x - b2.center.x).abs()) {
         x_overlap = (b1.halfwidth + b2.halfwidth) - (b1.center.x - b2.center.x).abs();
+        if b1.center.x < b2.center.x {
+            x_overlap = x_overlap * -1.0;
+        }
     }
     if !((b1.halfwidth + b2.halfwidth) < (b1.center.y - b2.center.y).abs()) {
         y_overlap = (b1.halfwidth + b2.halfwidth) - (b1.center.y - b2.center.y).abs();
+        if b1.center.y < b2.center.y {
+            y_overlap = y_overlap * -1.0;
+        }
     }
     if !((b1.halfwidth + b2.halfwidth).abs() < (b1.center.z - b2.center.z).abs()) {
         z_overlap = (b1.halfwidth + b2.halfwidth) - (b1.center.z - b2.center.z).abs();
+        if b1.center.z < b2.center.z {
+            z_overlap = z_overlap * -1.0;
+        }
     }
 
     // Get Disp

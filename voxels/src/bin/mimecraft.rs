@@ -43,7 +43,7 @@ impl Game for Game1 {
             chunks: vec![],
             rule: Rule::Title,
             twods: vec![],
-            player: Player::new(BBox{center:Pos3{x:10.0, y:350.0, z:10.0}, halfwidth:VOXEL_HALFWIDTH}),
+            player: Player::new(BBox{center:Pos3{x:10.0, y:350.0, z:10.0}, halfwidth:VOXEL_HALFWIDTH * 0.9}),
             contacts: Contacts::new(),
             particles: vec![],
         };
@@ -199,6 +199,7 @@ impl Game for Game1 {
                 //     self.player.process_contacts(&self.contacts.block_player);
                 // }
                 //collision option 2
+                self.player.reset_blocked();
                 for c in 0..engine.render.chunks.len() {
                     let chunk_pos = index_to_world(c);
                     let chunk_scale = CHUNK_SIZE as f32 * 2.0 * VOXEL_HALFWIDTH;

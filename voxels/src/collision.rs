@@ -40,17 +40,20 @@ fn restitute(chunk: &mut Chunk, player: &mut BBox, particles: &mut [Particle], c
             let x = c.mtv.x;
             let y = c.mtv.y;
             let z = c.mtv.z;
-            let restitute_factor = 1.0;
-            if y <= x && y <= z {
-                player.center.y += y * restitute_factor;
+            let xa = x.abs();
+            let ya = y.abs();
+            let za = z.abs();
+            let restitute_factor = 0.5;
+            if ya <= xa && ya <= za {
+                player.center.y -= y * restitute_factor;
                 c.mtv.x = 0.0;
                 c.mtv.z = 0.0;
-            } else if x <= y && x <= z {
-                player.center.x += x * restitute_factor;
+            } else if xa <= ya && xa <= za {
+                player.center.x -= x * restitute_factor;
                 c.mtv.y = 0.0;
                 c.mtv.z = 0.0;
             } else {
-                player.center.z += z * restitute_factor;
+                player.center.z -= z * restitute_factor;
                 c.mtv.x = 0.0;
                 c.mtv.y = 0.0;
             }
