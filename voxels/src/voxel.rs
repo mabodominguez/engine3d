@@ -1,15 +1,13 @@
-pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
-pub type Mat4 = cgmath::Matrix4<f32>;
 
 use crate::geom;
 use crate::model;
 use crate::texture;
 
-use cgmath::prelude::*;
-use crate::geom::{Mat4, Pos3, BBox};
+use crate::geom::{BBox, Mat4, Pos3};
 use crate::model::{DrawModel, Vertex, VertexTwoD};
 use crate::render::InstanceRaw;
+use cgmath::prelude::*;
 use cgmath::EuclideanSpace;
 
 const CHUNK_SIZE: usize = 8; // Size of lenght, width, and height of a chunk
@@ -25,7 +23,8 @@ pub enum Material {
 }
 
 impl Material {
-    pub fn strength(&self) -> i32 { // Possibly useful function to determine how much time it takes to break a block
+    pub fn strength(&self) -> i32 {
+        // Possibly useful function to determine how much time it takes to break a block
 
         match *self {
             Material::Grass => 1,
@@ -36,7 +35,8 @@ impl Material {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Voxel { // A voxel holds position and material info
+pub struct Voxel {
+    // A voxel holds position and material info
     pub center: Pos3,
     pub material: Material,
 }

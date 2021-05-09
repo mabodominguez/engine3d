@@ -13,7 +13,7 @@ pub struct Object2d {
     pub visible: bool,
     pub verts: [VertexTwoD; 4],
 }
-pub struct Asset2d(pub PathBuf);
+pub struct Asset2d(pub PathBuf, pub String);
 pub struct Assets {
     asset_root: PathBuf,
     models: HashMap<ModelRef, Model>,
