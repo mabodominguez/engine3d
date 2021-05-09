@@ -1,9 +1,11 @@
 use crate::geom::*;
+use crate::voxel::*;
+use crate::coordinates::*;
 use cgmath::*;
 use crate::camera::Camera;
 use crate::Events;
 use winit::event::*;
-use crate::collision::Contact;
+use crate::collision::*;
 
 pub struct Player {
     pub hitbox:BBox,
@@ -38,7 +40,7 @@ impl Player {
             vy: 0.0,
             vz: 0.0,
             facing_direction: cgmath::vec3(0.0, 0.0, 0.0),
-            speed: 0.3,
+            speed: 1.0,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
@@ -61,8 +63,6 @@ impl Player {
         return self.hitbox.center;
     }
     pub fn change_pos(&mut self, x: f32, y: f32, z: f32) {
-        // println!("{}", self.x_pos_blocked);
-        // println!("{}", self.z_pos_blocked);
         if (x > 0.0 && !self.x_pos_blocked) || (x < 0.0 && !self.x_neg_blocked) {
             self.hitbox.center.x += x;
         }
@@ -74,7 +74,7 @@ impl Player {
         }
     }
     pub fn process_contacts(&mut self, contacts:&Vec<Contact<usize>>) {
-        //self.reset_blocked();
+        self.reset_blocked();
         for Contact { mtv: disp, .. } in contacts.iter() {
             if disp.x > 0.0 {
                 self.x_neg_blocked = true;
@@ -82,17 +82,17 @@ impl Player {
             if disp.x < 0.0 {
                 self.x_pos_blocked = true;
             }
-            if disp.y < 0.0 {
+            if disp.y > 0.0 {
                 self.y_neg_blocked = true;
                 self.can_jump = true;
             }
-            if disp.y > 0.0 {
+            if disp.y < 0.0 {
                 self.y_pos_blocked = true;
             }
-            if disp.z < 0.0 {
+            if disp.z > 0.0 {
                 self.z_neg_blocked = true;
             }
-            if disp.z > 0.0 {
+            if disp.z < 0.0 {
                 self.z_pos_blocked = true;
             }
         }
@@ -105,26 +105,26 @@ impl Player {
         self.z_pos_blocked = false;
         self.z_neg_blocked = false;
     }
-    pub fn update(&mut self, camera: &mut Camera) {
+    pub fn update(&mut self, camera: &mut Camera, chunks: &Vec<Chunk>) {
         //change position based on velocity
-        
         if (!self.y_neg_blocked) {
                 self.vy -= 0.005;
-            if (self.vy <= -0.2) { //terminal velocity
-                self.vy = -0.2;
+            if (self.vy <= -0.1) { //terminal velocity
+                self.vy = -0.1;
             }
         } else {
             self.vy = 0.0;
         }
+        
         if (self.jump_pressed && self.can_jump) {
             self.vy = 0.15;
             self.can_jump = false;
         }
 
         if self.do_gravity {
-            self.change_pos(0.0, self.vy, 0.0);
-        } else {
-            self.vy = 0.0;
+            if !collide_y(self.hitbox, &chunks, self.vy) {
+                self.change_pos(0.0, self.vy, 0.0);
+            }
         }
         
 
@@ -136,30 +136,61 @@ impl Player {
         let right = forward_norm.cross(camera.up);
         if self.is_forward_pressed {
             let movement = forward_norm * self.speed;
-            self.change_pos(movement.x, 0.0, movement.z);
+            if !collide_x(self.hitbox, &chunks, movement.x){
+                self.change_pos(movement.x, 0.0, 0.0);
+            }
+            if !collide_z(self.hitbox, &chunks, movement.z){
+                self.change_pos(0.0, 0.0, movement.z);
+            }
         }
         if self.is_backward_pressed {
             let movement = -1.0 * forward_norm * self.speed;
-            self.change_pos(movement.x, 0.0, movement.z);
+            if !collide_x(self.hitbox, &chunks, movement.x){
+                self.change_pos(movement.x, 0.0, 0.0);
+            }
+            if !collide_z(self.hitbox, &chunks, movement.z){
+                self.change_pos(0.0, 0.0, movement.z);
+            }
         }
         if self.is_right_pressed {
             let movement = right * self.speed;
-            self.change_pos(movement.x, 0.0, movement.z);
+            if !collide_x(self.hitbox, &chunks, movement.x){
+                self.change_pos(movement.x, 0.0, 0.0);
+            }
+            if !collide_z(self.hitbox, &chunks, movement.z){
+                self.change_pos(0.0, 0.0, movement.z);
+            }
         }
         if self.is_left_pressed {
             let movement = -1.0 * right * self.speed;
-            self.change_pos(movement.x, 0.0, movement.z);
+            if !collide_x(self.hitbox, &chunks, movement.x){
+                self.change_pos(movement.x, 0.0, 0.0);
+            }
+            if !collide_z(self.hitbox, &chunks, movement.z){
+                self.change_pos(0.0, 0.0, movement.z);
+            }
         }
         if self.is_up_pressed {
-            self.change_pos(0.0, self.speed, 0.0);
+            if !collide_y(self.hitbox, &chunks, self.speed) {
+                self.change_pos(0.0, self.speed, 0.0);
+            }
         }
         if self.is_down_pressed {
-            self.change_pos(0.0, -1.0 * self.speed, 0.0);
+            if !collide_y(self.hitbox, &chunks, -1.0* self.speed) {
+                self.change_pos(0.0, -1.0 * self.speed, 0.0);
+            }
         }
         if self.is_gravity_pressed {
             self.do_gravity = !self.do_gravity;
         }
-        self.hitbox.center.y += self.vy;
+
+        
+        if !collide_y(self.hitbox, &chunks, self.vy){
+            self.hitbox.center.y += self.vy;
+        }
+        if collide_y(self.hitbox, &chunks, -(self.hitbox.halfwidth - 0.01)) {
+            self.can_jump = true;
+        }
         let player_pos = self.get_pos();
         let player_p3 = cgmath::point3(player_pos.x, player_pos.y, player_pos.z);
 

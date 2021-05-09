@@ -1,6 +1,7 @@
 use crate::particle::Particle;
 use crate::geom::*;
-use crate::voxel::Chunk;
+use crate::voxel::*;
+use crate::coordinates::*;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Contact<T: Copy> {
@@ -40,20 +41,16 @@ fn restitute(chunk: &mut Chunk, player: &mut BBox, particles: &mut [Particle], c
             let x = c.mtv.x;
             let y = c.mtv.y;
             let z = c.mtv.z;
-            let xa = x.abs();
-            let ya = y.abs();
-            let za = z.abs();
-            let restitute_factor = 0.5;
-            if ya <= xa && ya <= za {
-                player.center.y -= y * restitute_factor;
+            if y <= x && y <= z {
+                player.center.y += y / 2.0;
                 c.mtv.x = 0.0;
                 c.mtv.z = 0.0;
-            } else if xa <= ya && xa <= za {
-                player.center.x -= x * restitute_factor;
+            } else if x <= y && x <= z {
+                player.center.x += x / 2.0;
                 c.mtv.y = 0.0;
                 c.mtv.z = 0.0;
             } else {
-                player.center.z -= z * restitute_factor;
+                player.center.z += z / 2.0;
                 c.mtv.x = 0.0;
                 c.mtv.y = 0.0;
             }
@@ -76,6 +73,7 @@ fn gather_contacts1(chunk: &mut Chunk, player: &mut BBox, into: &mut Contacts) {
     for (ai, a) in chunk.voxels.iter().enumerate() {
         if chunk.data_at(ai) != 0 {
             if let Some(disp) = disp_box_box(a, player) {
+                println!("contact");
                 into.block_player.push(Contact {
                     a: ai,
                     b: 0,
@@ -85,4 +83,28 @@ fn gather_contacts1(chunk: &mut Chunk, player: &mut BBox, into: &mut Contacts) {
         }
         
     }
+}
+
+pub fn collide_x(hitbox: BBox,  chunks: & Vec<Chunk>, x: f32,) -> bool {
+    let hitbox_center = hitbox.center;
+    let halfwidth = hitbox.halfwidth;
+    let border_check = cgmath::point3(hitbox_center.x + halfwidth*x.signum() + x, hitbox_center.y, hitbox_center.z);
+    let (i, (x,y,z)) = world_to_chunk(border_check);
+    chunks[i].data[x][y][z] != 0
+}
+
+pub fn collide_y(hitbox: BBox,  chunks: & Vec<Chunk>, y: f32,) -> bool {
+    let hitbox_center = hitbox.center;
+    let halfwidth = hitbox.halfwidth;
+    let border_check = cgmath::point3(hitbox_center.x, hitbox_center.y + halfwidth*y.signum() + y, hitbox_center.z);
+    let (i, (x,y,z)) = world_to_chunk(border_check);
+    chunks[i].data[x][y][z] != 0
+}
+
+pub fn collide_z(hitbox: BBox,  chunks: & Vec<Chunk>, z: f32,) -> bool {
+    let hitbox_center = hitbox.center;
+    let halfwidth = hitbox.halfwidth;
+    let border_check = cgmath::point3(hitbox_center.x, hitbox_center.y, hitbox_center.z + halfwidth*z.signum() + z);
+    let (i, (x,y,z)) = world_to_chunk(border_check);
+    chunks[i].data[x][y][z] != 0
 }

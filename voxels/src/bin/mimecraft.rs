@@ -43,7 +43,7 @@ impl Game for Game1 {
             chunks: vec![],
             rule: Rule::Title,
             twods: vec![],
-            player: Player::new(BBox{center:Pos3{x:10.0, y:350.0, z:10.0}, halfwidth:VOXEL_HALFWIDTH * 0.9}),
+            player: Player::new(BBox{center:Pos3{x:10.0, y:280.0, z:10.0}, halfwidth:VOXEL_HALFWIDTH * 0.9}),
             contacts: Contacts::new(),
             particles: vec![],
         };
@@ -204,19 +204,19 @@ impl Game for Game1 {
                 //     self.player.process_contacts(&self.contacts.block_player);
                 // }
                 //collision option 2
-                self.player.reset_blocked();
-                for c in 0..engine.render.chunks.len() {
-                    let chunk_pos = index_to_world(c);
-                    let chunk_scale = CHUNK_SIZE as f32 * 2.0 * VOXEL_HALFWIDTH;
-                    let chunk_posf = Pos3{x:chunk_pos.0 as f32 * chunk_scale, y:chunk_pos.1 as f32 * chunk_scale, z:chunk_pos.2 as f32 * chunk_scale};
-                    if dist_3d(self.player.hitbox.center, chunk_posf) <= chunk_scale * 3.0 {
-                        let chunk = &mut engine.render.chunks[c];
-                        if !chunk.bboxes_generated(){chunk.create_bboxes(c);println!("generated {}", c);}
-                        update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
-                        self.player.process_contacts(&self.contacts.block_player);
-                    }
-                }
-                self.player.update(&mut engine.render.camera);
+                // self.player.reset_blocked();
+                // for c in 0..engine.render.chunks.len() {
+                //     let chunk_pos = index_to_world(c);
+                //     let chunk_scale = CHUNK_SIZE as f32 * 2.0 * VOXEL_HALFWIDTH;
+                //     let chunk_posf = Pos3{x:chunk_pos.0 as f32 * chunk_scale, y:chunk_pos.1 as f32 * chunk_scale, z:chunk_pos.2 as f32 * chunk_scale};
+                //     if dist_3d(self.player.hitbox.center, chunk_posf) <= chunk_scale * 3.0 {
+                //         let chunk = &mut engine.render.chunks[c];
+                //         if !chunk.bboxes_generated(){chunk.create_bboxes(c);println!("generated {}", c);}
+                //         update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
+                //         self.player.process_contacts(&self.contacts.block_player);
+                //     }
+                // }
+                self.player.update(&mut engine.render.camera, &engine.render.chunks);
                 engine.render.update();
                 // Change this with new camera code and stuff
                 // render gameplay relevent stuff
