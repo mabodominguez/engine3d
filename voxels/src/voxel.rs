@@ -12,14 +12,18 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn create_bboxes(&mut self, i:usize) {
-        let (x,y,z) = index_to_world(i);
+        let (x,y,z) = index_to_world(i);//need to fix xyz
+        let chunk_scale = (VOXEL_HALFWIDTH * 2.0) * CHUNK_SIZE as f32;
+        let origin_x = x as f32 * chunk_scale;
+        let origin_y = y as f32 * chunk_scale;
+        let origin_z = z as f32 * chunk_scale;
         let voxel_width = 2.0 * VOXEL_HALFWIDTH;
         for i in 0..CHUNK_SIZE {
             for j in 0..CHUNK_SIZE {
                 for k in 0..CHUNK_SIZE {
-                    let voxel_x = (x  + CHUNK_SIZE * i) as f32  + VOXEL_HALFWIDTH;
-                    let voxel_y = (y  + CHUNK_SIZE * j) as f32 + VOXEL_HALFWIDTH;
-                    let voxel_z = (z  + CHUNK_SIZE * k) as f32 + VOXEL_HALFWIDTH;
+                    let voxel_x = origin_x + (i) as f32 * voxel_width + VOXEL_HALFWIDTH;
+                    let voxel_y = origin_y + (j) as f32 * voxel_width + VOXEL_HALFWIDTH;
+                    let voxel_z = origin_z + (k) as f32 * voxel_width + VOXEL_HALFWIDTH;
                     let voxel_pos = Pos3{x:voxel_x, y:voxel_y, z:voxel_z};
                     self.voxels.push(BBox{center:voxel_pos, halfwidth:VOXEL_HALFWIDTH});
                 }

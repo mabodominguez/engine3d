@@ -121,6 +121,8 @@ impl Player {
 
         if self.do_gravity {
             self.change_pos(0.0, self.vy, 0.0);
+        } else {
+            self.vy = 0.0;
         }
         
 
