@@ -20,28 +20,6 @@ pub type Mat4 = cgmath::Matrix4<f32>;
 
 pub const DT: f32 = 1.0 / 30.0;
 
-const HOTBAR_HEIGHT: f32 = 0.0;
-const HOTBAR_WIDTH: f32 = 0.0;
-// tl, bl, tr, br
-const HOTBAR_VERTS: &[VertexTwoD] = &[
-    VertexTwoD {
-        position: [-0.9, -0.5], // make 0s -1s (x and y go from -1 to 1)
-        tex_coords: [0.0, 0.0],
-    },
-    VertexTwoD {
-        position: [-0.9, -0.9],
-        tex_coords: [0.0, 1.0],
-    },
-    VertexTwoD {
-        position: [0.9, -0.5],
-        tex_coords: [1.0, 0.0],
-    },
-    VertexTwoD {
-        position: [0.9, -0.9],
-        tex_coords: [1.0, 1.0],
-    },
-];
-
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
@@ -143,8 +121,6 @@ pub struct Render {
     buffers_2d: Vec<wgpu::Buffer>,
     bind_groups_2d: Vec<wgpu::BindGroup>,
     pub objects_2d: Vec<TwoDID>,
-    hotbar_buffer: wgpu::Buffer,
-    hotbar_bind_group: wgpu::BindGroup,
     render_2d_pipeline: wgpu::RenderPipeline,
     pub sound: Sound,
 }
@@ -223,7 +199,7 @@ impl Render {
         };
 
         let camera_controller =
-            CameraController::new(0.2, size.width as i32 / 2, size.height as i32 / 2);
+            CameraController::new(size.width as i32 / 2, size.height as i32 / 2);
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -259,12 +235,6 @@ impl Render {
         let buffers_2d = vec![];
         let bind_groups_2d = vec![];
         let objects_2d = vec![];
-
-        let hotbar_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(HOTBAR_VERTS),
-            usage: wgpu::BufferUsage::VERTEX,
-        });
 
         let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
         let vs_2d_module = device.create_shader_module(&wgpu::include_spirv!("shader2d.vert.spv"));
@@ -304,9 +274,9 @@ impl Render {
                 }],
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip, // TODO: how does this change for a rectangle?
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, // 2.
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::None,
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -350,26 +320,8 @@ impl Render {
             }],
             label: Some("uniform_bind_group"),
         });
-        let diffuse_path = "hotbar.png";
-        let diffuse_texture = Texture::load(&device, &queue, res_dir.join(diffuse_path)).unwrap();
-
-        let hotbar_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("hotbar_bind_group"),
-        });
 
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        // let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
         let depth_texture = Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
@@ -437,15 +389,13 @@ impl Render {
             uniform_buffer,
             uniform_bind_group,
             depth_texture,
-            chunks, // chunks in the world (or to be rendered. TBD)
+            chunks,
             dynamic_chunks,
             current_chunk: 0,
             dynamic_center: 0,
             buffers_2d,
             bind_groups_2d,
             objects_2d,
-            hotbar_buffer,
-            hotbar_bind_group,
             render_2d_pipeline,
             sound,
         }
@@ -463,7 +413,6 @@ impl Render {
 
     /// Use to set up 2d objects to be drawn
     pub fn set_2d_buffers(&mut self, objects_2d: &Vec<Object2d>) -> Vec<TwoDID> {
-        // self.buffers_2d.clear();
         // re use buffers ... have add/remove 2d funtion called from update
         let mut ids = vec![];
         for object in objects_2d {
@@ -493,7 +442,6 @@ impl Render {
 
     /// Use to set up all the textures to be drawn
     pub fn set_2d_bind_groups(&mut self, assets_2d: &Vec<Asset2d>) {
-        // self.bind_groups_2d.clear();
         for asset in assets_2d {
             let diffuse_texture = Texture::load(&self.device, &self.queue, &asset.0).unwrap();
 
@@ -516,7 +464,6 @@ impl Render {
     }
 
     pub fn input(&mut self, events: &Events, selected_block: u8) -> bool {
-        //TODO shift plane
         self.camera_controller.process_events(events);
         let new_index = world_to_chunk(self.camera.eye).0 as isize;
         if self.current_chunk != new_index {
@@ -537,9 +484,9 @@ impl Render {
 
     pub(crate) fn render<R, G: Game<StaticData = R>>(
         &mut self,
-        game: &mut G,
-        rules: &R,
-        assets: &mut Assets,
+        _game: &mut G,
+        _rules: &R,
+        _assets: &mut Assets,
     ) -> Result<(), wgpu::SwapChainError> {
         // Update buffers based on dynamics
 
@@ -641,13 +588,12 @@ impl Render {
             if self.chunks[i].data[x][y][z] != 0 {
                 let difference = i as isize - self.current_chunk;
                 let selected_block = self.chunks[i].data[x][y][z];
-                    if selected_block == 1 || selected_block == 2 {
-                        self.sound.play_sound("dirt".to_string());
-                    } else {
-                        self.sound.play_sound("stone".to_string());
-                    }
+                if selected_block == 1 || selected_block == 2 {
+                    self.sound.play_sound("dirt".to_string());
+                } else {
+                    self.sound.play_sound("stone".to_string());
+                }
                 if difference == 0 {
-                    
                     self.chunks[i].data[x][y][z] = 0;
                     self.dynamic_chunks[self.dynamic_center] = chunk_to_raw(
                         self.voxel_model.materials.len(),

@@ -1,13 +1,10 @@
-use std::collections::HashMap;
-use kira::sound::handle::SoundHandle;
 use kira::instance::InstanceSettings;
-use kira::sound::SoundSettings;
-use kira::manager::AudioManagerSettings;
-use kira::manager::AudioManager;
 use kira::manager::error::SetupError;
-//use kira::CommandError;
-//use kira::instance::handle::InstanceHandle;
-use kira::manager::error::LoadSoundError;
+use kira::manager::AudioManager;
+use kira::manager::AudioManagerSettings;
+use kira::sound::handle::SoundHandle;
+use kira::sound::SoundSettings;
+use std::collections::HashMap;
 
 pub struct Sound {
     sound_map: HashMap<String, SoundHandle>,
@@ -16,9 +13,9 @@ pub struct Sound {
 
 impl Sound {
     pub fn new() -> Self {
-        let sound_map:HashMap<String, SoundHandle> = HashMap::new();
-        let manager:Option<AudioManager> = None;
-        Self{
+        let sound_map: HashMap<String, SoundHandle> = HashMap::new();
+        let manager: Option<AudioManager> = None;
+        Self {
             sound_map: sound_map,
             manager: manager,
         }
@@ -34,18 +31,22 @@ impl Sound {
             Some(manager) => {
                 let handler_r = manager.load_sound(path, SoundSettings::default());
                 match handler_r {
-                    Ok(handler) => {self.sound_map.insert(name, handler);},
+                    Ok(handler) => {
+                        self.sound_map.insert(name, handler);
+                    }
                     _ => println!("load sound error"),
                 }
-            },
+            }
             None => println!("missing manager"),
         }
     }
     pub fn play_sound(&mut self, name: String) {
-        let mut map_element = self.sound_map.get_mut(&name);
+        let map_element = self.sound_map.get_mut(&name);
         match map_element {
-            Some(sound_handle) => {let _ = sound_handle.play(InstanceSettings::default());},
-            None => println!("missing sound"), 
+            Some(sound_handle) => {
+                let _ = sound_handle.play(InstanceSettings::default());
+            }
+            None => println!("missing sound"),
         }
     }
 }

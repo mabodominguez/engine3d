@@ -31,20 +31,20 @@ pub fn make_world() -> Vec<Chunk> {
         for cy in 0..WORLD_DIMS.1 {
             for cz in 0..WORLD_DIMS.2 {
                 if cy == 0 {
-                    chunks.push(make_bottom_layer((cx as f64, cy as f64, cz as f64),
-                    &perlin3,));
-                }
-                else if cy >= (WORLD_DIMS.1 - 1) {
+                    chunks.push(make_bottom_layer(
+                        (cx as f64, cy as f64, cz as f64),
+                        &perlin3,
+                    ));
+                } else if cy >= (WORLD_DIMS.1 - 1) {
                     chunks.push(make_air_layer());
-                }
-                else if cy >= (WORLD_DIMS.1 - 2) {
+                } else if cy >= (WORLD_DIMS.1 - 2) {
                     chunks.push(make_top_layer(
                         (cx as f64, cy as f64, cz as f64),
                         &perlin2,
                         &perlin3,
                     ));
                 } else {
-                    chunks.push(make_mid_layer( (cx as f64, cy as f64, cz as f64),  &perlin3));
+                    chunks.push(make_mid_layer((cx as f64, cy as f64, cz as f64), &perlin3));
                 }
             }
         }
@@ -57,7 +57,6 @@ fn make_top_layer(
     noise: &Add<[f64; 2]>,
     noise_3_d: &Perlin,
 ) -> Chunk {
-
     // Array that we'll copy into chunks
     let mut data: [[[u8; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
         [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
@@ -102,11 +101,10 @@ fn make_top_layer(
         }
     }
 
-    return Chunk { data, voxels:vec![] };
+    return Chunk { data };
 }
 
-
-fn make_air_layer() -> Chunk{
+fn make_air_layer() -> Chunk {
     let mut data: [[[u8; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
         [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
     for x in 0..CHUNK_SIZE {
@@ -116,14 +114,10 @@ fn make_air_layer() -> Chunk{
             }
         }
     }
-    Chunk { data, voxels:vec![]}
+    Chunk { data }
 }
 
-
-fn make_mid_layer(
-    (cx, cy, cz): (f64, f64, f64),
-    noise_3_d: &Perlin,
-) -> Chunk{
+fn make_mid_layer((cx, cy, cz): (f64, f64, f64), noise_3_d: &Perlin) -> Chunk {
     // Array that we'll copy into chunks
     let mut data: [[[u8; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
         [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
@@ -137,26 +131,22 @@ fn make_mid_layer(
                 let world_z = cz * (CHUNK_SIZE as f64) + (z as f64);
 
                 // Get noise
-                // Noise adjusted to range from 0 - 1 
+                // Noise adjusted to range from 0 - 1
                 let noise_val = (noise_3_d.get([
                     world_x * PERLIN_STEP_MID,
                     world_y * PERLIN_STEP_MID,
                     world_z * PERLIN_STEP_MID,
-                ]) + 1.0) / 2.0;
+                ]) + 1.0)
+                    / 2.0;
                 let material = mid_material(noise_val);
                 data[x][y][z] = material;
             }
         }
     }
-    Chunk { data , voxels:vec![]}
+    Chunk { data }
 }
 
-
-
-fn make_bottom_layer(
-    (cx, cy, cz): (f64, f64, f64),
-    noise_3_d: &Perlin,
-) -> Chunk{
+fn make_bottom_layer((cx, cy, cz): (f64, f64, f64), noise_3_d: &Perlin) -> Chunk {
     // Array that we'll copy into chunks
     let mut data: [[[u8; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
         [[[0; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
@@ -170,26 +160,27 @@ fn make_bottom_layer(
                 let world_z = cz * (CHUNK_SIZE as f64) + (z as f64);
 
                 // Get noise
-                // Noise adjusted to range from 0 - 1 
-                if y == 0{
+                // Noise adjusted to range from 0 - 1
+                if y == 0 {
                     data[x][y][z] = 7;
                 } else {
                     let noise_val = (noise_3_d.get([
                         world_x * PERLIN_STEP_MID,
                         world_y * PERLIN_STEP_MID,
                         world_z * PERLIN_STEP_MID,
-                    ]) + 1.0) / 2.0;
+                    ]) + 1.0)
+                        / 2.0;
                     let material = bottom_material(noise_val);
                     data[x][y][z] = material;
                 }
             }
         }
     }
-    Chunk { data , voxels:vec![]}
+    Chunk { data }
 }
 
 // ROCK -> 3
-// IRON -> 4 
+// IRON -> 4
 // GOLD -> 5
 // DIAMOND -> 6
 // BEDROCK -> 7

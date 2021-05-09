@@ -1,29 +1,18 @@
-use engine3d::assets::{Asset2d, Assets, Object2d};
-use engine3d::camera::*;
-use engine3d::events::*;
+use engine3d::assets::{Assets, Object2d};
+use engine3d::geom::BBox;
 use engine3d::model::*;
-use engine3d::render::TwoDID;
-use engine3d::voxel::{Chunk, VOXEL_HALFWIDTH, CHUNK_SIZE};
 use engine3d::player::Player;
-use engine3d::geom::{BBox, dist_3d};
+use engine3d::render::TwoDID;
+use engine3d::voxel::VOXEL_HALFWIDTH;
 use engine3d::{Engine, Game};
-use engine3d::collision::*;
-use engine3d::coordinates::*;
-use engine3d::particle::Particle;
-use engine3d::world_gen::{WORLD_MAX};
 pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 pub use winit::event::VirtualKeyCode as KeyCode;
 
 pub struct Game1 {
-    camera_pos: Pos3,
-    chunks: Vec<Chunk>,
     twods: Vec<TwoDID>,
-    rule: Rule,
     player: Player,
-    contacts: Contacts,
-    particles: Vec<Particle>,
 }
 #[derive(Debug)]
 pub enum Rule {
@@ -35,21 +24,28 @@ impl Game for Game1 {
     type StaticData = Rule;
     fn start(engine: &mut Engine) -> (Self, Self::StaticData) {
         let mut game = Game1 {
-            camera_pos: Pos3 {
-                x: 10.0,
-                y: 90.0,
-                z: 90.0,
-            },
-            chunks: vec![],
-            rule: Rule::Title,
             twods: vec![],
-            player: Player::new(BBox{center:Pos3{x:10.0, y:280.0, z:10.0}, halfwidth:VOXEL_HALFWIDTH * 0.9}),
-            contacts: Contacts::new(),
-            particles: vec![],
+            player: Player::new(BBox {
+                center: Pos3 {
+                    x: 10.0,
+                    y: 280.0,
+                    z: 10.0,
+                },
+                halfwidth: VOXEL_HALFWIDTH * 0.9,
+            }),
         };
-        engine.render.sound.add_sound("bgm".to_string(), "../content/backgroundmusic.mp3".to_string());
-        engine.render.sound.add_sound("dirt".to_string(), "../content/dirt.mp3".to_string());
-        engine.render.sound.add_sound("stone".to_string(), "../content/stone.mp3".to_string());
+        engine.render.sound.add_sound(
+            "bgm".to_string(),
+            "../content/backgroundmusic.mp3".to_string(),
+        );
+        engine
+            .render
+            .sound
+            .add_sound("dirt".to_string(), "../content/dirt.mp3".to_string());
+        engine
+            .render
+            .sound
+            .add_sound("stone".to_string(), "../content/stone.mp3".to_string());
         let bind_groups = vec![
             engine3d::assets::Asset2d(
                 std::path::Path::new(env!("OUT_DIR"))
@@ -82,7 +78,7 @@ impl Game for Game1 {
                 bg: 0,
                 verts: [
                     VertexTwoD {
-                        position: [-1.0, 1.0], // make 0s -1s (x and y go from -1 to 1)
+                        position: [-1.0, 1.0],
                         tex_coords: [0.0, 0.0],
                     },
                     VertexTwoD {
@@ -148,7 +144,7 @@ impl Game for Game1 {
                 bg: 3,
                 verts: [
                     VertexTwoD {
-                        position: [-1.0, 1.0], // make 0s -1s (x and y go from -1 to 1)
+                        position: [-1.0, 1.0],
                         tex_coords: [0.0, 0.0],
                     },
                     VertexTwoD {
@@ -175,7 +171,6 @@ impl Game for Game1 {
         match rules {
             Rule::Title => {
                 if engine.events.key_pressed(KeyCode::L) {
-                    // TODO: insert load game here
                     engine.render.chunks = engine3d::save::load();
                     // start gameplay
                     *rules = Rule::Play(1);
@@ -192,38 +187,14 @@ impl Game for Game1 {
             Rule::Play(i) => {
                 self.player.process_events(&engine.events);
                 engine.render.input(&engine.events, *i);
-                //collision option 1
-                // let (mut chunk_index, _) = world_to_chunk(self.player.hitbox.center);
-                // if engine.render.chunks.len() == 0 {
-                //     chunk_index = 0;
-                // } else {
-                //     chunk_index = chunk_index.clamp(0, engine.render.chunks.len()-1);
-                //     let chunk = &mut engine.render.chunks[chunk_index];
-                //     if !chunk.bboxes_generated(){chunk.create_bboxes(chunk_index);println!("generated {}", chunk_index);}
-                //     update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
-                //     self.player.process_contacts(&self.contacts.block_player);
-                // }
-                //collision option 2
-                // self.player.reset_blocked();
-                // for c in 0..engine.render.chunks.len() {
-                //     let chunk_pos = index_to_world(c);
-                //     let chunk_scale = CHUNK_SIZE as f32 * 2.0 * VOXEL_HALFWIDTH;
-                //     let chunk_posf = Pos3{x:chunk_pos.0 as f32 * chunk_scale, y:chunk_pos.1 as f32 * chunk_scale, z:chunk_pos.2 as f32 * chunk_scale};
-                //     if dist_3d(self.player.hitbox.center, chunk_posf) <= chunk_scale * 3.0 {
-                //         let chunk = &mut engine.render.chunks[c];
-                //         if !chunk.bboxes_generated(){chunk.create_bboxes(c);println!("generated {}", c);}
-                //         update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
-                //         self.player.process_contacts(&self.contacts.block_player);
-                //     }
-                // }
-                self.player.update(&mut engine.render.camera, &engine.render.chunks);
+                self.player
+                    .update(&mut engine.render.camera, &engine.render.chunks);
                 engine.render.update();
                 // Change this with new camera code and stuff
                 // render gameplay relevent stuff
 
                 // render hotbar + hotbar highlight
                 engine.render.objects_2d[1].2 = true;
-                // engine.render.objects_2d[2].2 = true;
                 let mut moved_highlight = Object2d {
                     bg: 2,
                     verts: [
@@ -254,7 +225,6 @@ impl Game for Game1 {
 
                 if engine.events.key_pressed(KeyCode::Key1) {
                     *rules = Rule::Play(1);
-                    // moved_highlight.verts[]
                     engine
                         .render
                         .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
@@ -359,13 +329,6 @@ impl Game for Game1 {
                 if engine.events.key_pressed(KeyCode::T) {
                     engine3d::save::save(&engine.render.chunks);
                 }
-
-                // here is a good place to handle loading
-                // render title screen
-                // handle key press to go to play
-                // Change this with new camera code and stuff
-                // engine.camera_controller.update_camera(&mut engine.render.camera);
-                // render hot bar and stuff? change assets unclear
             }
             Rule::End => {
                 engine.render.objects_2d[3].2 = true;
@@ -378,6 +341,7 @@ impl Game for Game1 {
             }
         }
     }
+    #[allow(unused_variables)]
     fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {}
 }
 

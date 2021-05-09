@@ -7,28 +7,26 @@ use winit::{
 
 pub mod camera;
 pub mod camera_control;
-// pub mod collision;
-pub mod events;
-pub mod gamestate;
-pub mod geom;
-pub mod model;
-pub mod texture;
-pub mod coordinates;
-pub mod voxel;
-pub mod player;
 pub mod collision;
-pub mod particle;
+pub mod coordinates;
+pub mod events;
+pub mod geom;
 pub mod instance_raw;
+pub mod model;
+pub mod particle;
+pub mod player;
+pub mod texture;
+pub mod voxel;
 use events::Events;
 pub mod render;
 use render::Render;
 pub mod assets;
-pub mod world_gen;
 pub mod save;
 pub mod sound;
+pub mod world_gen;
 use sound::Sound;
 
-use assets::{Asset2d, Assets, Object2d};
+use assets::Assets;
 
 pub const DT: f32 = 1.0 / 60.0;
 
@@ -46,12 +44,6 @@ pub struct Engine {
     pub events: Events,
 }
 
-// pub enum Rule {
-//     Title,
-//     Play,
-//     End,
-// }
-
 impl Engine {
     // do we need this? i don't think so
     pub fn load_model(&mut self, model: impl AsRef<Path>) -> assets::ModelRef {
@@ -62,24 +54,6 @@ impl Engine {
             model,
         )
     }
-    // pub fn load_gltf(
-    //     &mut self,
-    //     gltf: impl AsRef<Path>,
-    // ) -> (
-    //     Vec<assets::ModelRef>,
-    //     Vec<assets::RigRef>,
-    //     Vec<assets::AnimRef>,
-    // ) {
-    //     self.assets.load_gltf(
-    //         &self.render.device,
-    //         &self.render.queue,
-    //         &self.render.texture_layout,
-    //         gltf,
-    //     )
-    // }
-    // pub fn camera_mut(&mut self) -> &mut camera::Camera {
-    //     &mut self.render.camera
-    // }
 }
 
 pub fn run<R, G: Game<StaticData = R>>(
@@ -148,7 +122,6 @@ pub fn run<R, G: Game<StaticData = R>>(
                     // All other errors (Outdated, Timeout) should be resolved by the next frame
                     Err(e) => eprintln!("{:?}", e),
                 }
-                
                 // The renderer "produces" time...
                 available_time += since.elapsed().as_secs_f32();
                 since = Instant::now();
@@ -161,11 +134,13 @@ pub fn run<R, G: Game<StaticData = R>>(
             available_time -= DT;
 
             game.update(&mut rules, &mut engine);
-            let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(engine.render.camera_controller.center_x, engine.render.camera_controller.center_y));
+            let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(
+                engine.render.camera_controller.center_x,
+                engine.render.camera_controller.center_y,
+            ));
             engine.events.next_frame();
             engine.frame += 1;
             // Increment the frame counter
-            //frame_count += 1;
         }
     });
 }
