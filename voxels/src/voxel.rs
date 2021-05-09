@@ -1,5 +1,7 @@
+
 pub const VOXEL_HALFWIDTH: f32 = 2.0; // Size of a voxel (halfwidth)
 pub const CHUNK_SIZE: usize = 16; // Size of lenght, width, and height of a chunk
+
 
 pub struct Chunk {
     // Array that holds the vector info. It dimensions are CHUNK_SIZE^3

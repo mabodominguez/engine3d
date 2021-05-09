@@ -32,7 +32,7 @@ pub const DT: f32 = 1.0 / 60.0;
 pub trait Game: Sized {
     type StaticData;
     fn start(engine: &mut Engine) -> (Self, Self::StaticData);
-    fn update(&mut self, rules: &Self::StaticData, engine: &mut Engine);
+    fn update(&mut self, rules: &mut Self::StaticData, engine: &mut Engine);
     fn render(&mut self, rules: &Self::StaticData, assets: &Assets);
 }
 
@@ -98,7 +98,7 @@ pub fn run<R, G: Game<StaticData = R>>(
         events,
         frame: 0,
     };
-    let (mut game, rules) = G::start(&mut engine);
+    let (mut game, mut rules) = G::start(&mut engine);
     let mut available_time: f32 = 0.0;
     let mut since = Instant::now();
     event_loop.run_return(move |event, _, control_flow| {
@@ -154,7 +154,8 @@ pub fn run<R, G: Game<StaticData = R>>(
         while available_time >= DT {
             // Eat up one frame worth of time
             available_time -= DT;
-            game.update(&rules, &mut engine);
+
+            game.update(&mut rules, &mut engine);
             let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(engine.render.camera_controller.center_x, engine.render.camera_controller.center_y));
             engine.events.next_frame();
             engine.frame += 1;

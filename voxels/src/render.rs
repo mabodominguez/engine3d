@@ -53,7 +53,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 );
 
 #[derive(Copy, Clone)]
-pub struct TwoDID(usize, usize, bool);
+pub struct TwoDID(usize, usize, pub bool);
 
 pub struct ChunkRender {
     instance_data: Vec<Vec<InstanceRaw>>,
@@ -146,7 +146,7 @@ pub struct Render {
     dynamic_center: usize,
     buffers_2d: Vec<wgpu::Buffer>,
     bind_groups_2d: Vec<wgpu::BindGroup>,
-    pub(crate) objects_2d: Vec<TwoDID>,
+    pub objects_2d: Vec<TwoDID>,
     hotbar_buffer: wgpu::Buffer,
     hotbar_bind_group: wgpu::BindGroup,
     render_2d_pipeline: wgpu::RenderPipeline,
@@ -224,7 +224,9 @@ impl Render {
             znear: 0.1,
             zfar: 200.0,
         };
+
         let camera_controller = CameraController::new(0.2, size.width as i32/ 2, size.height as i32/ 2);
+
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera);
@@ -457,8 +459,10 @@ impl Render {
     }
 
     /// Use to set up 2d objects to be drawn
-    pub fn set_2d_buffers(&mut self, objects_2d: &Vec<Object2d>) {
+    pub fn set_2d_buffers(&mut self, objects_2d: &Vec<Object2d>) -> Vec<TwoDID> {
+        // self.buffers_2d.clear();
         // re use buffers ... have add/remove 2d funtion called from update
+        let mut ids = vec![];
         for object in objects_2d {
             let buffer = self
                 .device
@@ -470,15 +474,13 @@ impl Render {
             self.buffers_2d.push(buffer);
             self.objects_2d
                 .push(TwoDID(self.objects_2d.len(), object.bg, object.visible));
+            ids.push(TwoDID(self.objects_2d.len(), object.bg, object.visible));
         }
+        ids
     }
 
     /// Use to update a 2d buffer
-    pub fn update_2d_buffer<R, G: Game<StaticData = R>>(
-        &mut self,
-        object: &Object2d,
-        object_id: TwoDID,
-    ) {
+    pub fn update_2d_buffer(&mut self, object: &Object2d, object_id: TwoDID) {
         self.queue.write_buffer(
             &self.buffers_2d[object_id.0],
             0,
@@ -488,6 +490,7 @@ impl Render {
 
     /// Use to set up all the textures to be drawn
     pub fn set_2d_bind_groups(&mut self, assets_2d: &Vec<Asset2d>) {
+        // self.bind_groups_2d.clear();
         for asset in assets_2d {
             let diffuse_texture = Texture::load(&self.device, &self.queue, &asset.0).unwrap();
 
@@ -503,7 +506,7 @@ impl Render {
                         resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                     },
                 ],
-                label: Some("hotbar_bind_group"), // change to be dependent
+                label: Some("bind_group"), // change to be dependent
             });
             self.bind_groups_2d.push(bind_group);
         }
