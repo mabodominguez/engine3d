@@ -720,7 +720,7 @@ impl Render {
                         );
                     } else if difference % (WORLD_DIMS.1 * WORLD_DIMS.2) as isize == 0 {
                         // Difference is in X
-                        self.chunks[place_i].data[px][py][pz] = 1; // TODO: SELECTED BLOCK
+                        self.chunks[place_i].data[px][py][pz] = selected_block; // TODO: SELECTED BLOCK
                         let offset =
                             (4 * RENDER_RADIUS.1 * RENDER_RADIUS.0) as isize * difference.signum();
                         self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize] =
@@ -732,7 +732,7 @@ impl Render {
                             );
                     } else if difference % WORLD_DIMS.2 as isize == 0 {
                         // DIfference is in Y
-                        self.chunks[place_i].data[px][py][pz] = 1; // TODO: SELECTED BLOCK
+                        self.chunks[place_i].data[px][py][pz] = selected_block; // TODO: SELECTED BLOCK
                         let offset = (2 * RENDER_RADIUS.0) as isize * difference.signum();
                         self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize] =
                             chunk_to_raw(
@@ -742,7 +742,7 @@ impl Render {
                                 i,
                             );
                     } else {
-                        self.chunks[place_i].data[px][py][pz] = 1; // TODO: SELECTED BLOCK
+                        self.chunks[place_i].data[px][py][pz] = selected_block; // TODO: SELECTED BLOCK
                         let offset = difference.signum();
                         self.dynamic_chunks[(self.dynamic_center as isize + offset) as usize] =
                             chunk_to_raw(

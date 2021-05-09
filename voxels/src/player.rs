@@ -40,7 +40,7 @@ impl Player {
             vy: 0.0,
             vz: 0.0,
             facing_direction: cgmath::vec3(0.0, 0.0, 0.0),
-            speed: 1.0,
+            speed: 0.5,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
