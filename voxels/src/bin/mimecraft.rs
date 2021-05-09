@@ -155,15 +155,14 @@ impl Game for Game1 {
         engine.render.set_2d_bind_groups(&bind_groups);
         game.twods = engine.render.set_2d_buffers(&objects_2d);
         return (game, Rule::Title);
-
     }
     fn update(&mut self, rules: &mut Self::StaticData, engine: &mut Engine) {
-        println!("{:?}", rules);
+        // println!("{:?}", rules);
         match rules {
             Rule::Title => {
                 if engine.events.key_pressed(KeyCode::L) {
                     // TODO: insert load game here
-
+                    engine.render.chunks = engine3d::save::load();
                     // start gameplay
                     *rules = Rule::Play(1);
                     engine.render.objects_2d[0].2 = false;
@@ -175,79 +174,173 @@ impl Game for Game1 {
                 }
             }
             Rule::Play(i) => {
+                engine.render.input(&engine.events, *i);
+                engine.render.update();
                 // Change this with new camera code and stuff
                 // render gameplay relevent stuff
 
                 // render hotbar + hotbar highlight
                 engine.render.objects_2d[1].2 = true;
-                engine.render.objects_2d[2].2 = false;
+                // engine.render.objects_2d[2].2 = true;
                 let mut moved_highlight = Object2d {
                     bg: 2,
                     verts: [
                         VertexTwoD {
-                            position: [-0.9, -0.5],
+                            position: [-0.855, -0.551],
                             tex_coords: [0.0, 0.0],
                         },
                         VertexTwoD {
-                            position: [-0.9, -0.9],
+                            position: [-0.586, -0.551],
                             tex_coords: [0.0, 1.0],
                         },
                         VertexTwoD {
-                            position: [0.9, -0.5],
+                            position: [-0.855, -0.827],
                             tex_coords: [1.0, 0.0],
                         },
                         VertexTwoD {
-                            position: [0.9, -0.9],
+                            position: [-0.586, -0.827],
                             tex_coords: [1.0, 1.0],
                         },
                     ],
                     visible: false,
                 };
-                if engine.events.key_pressed(KeyCode::Escape) {
+                if engine.events.key_pressed(KeyCode::Q) {
                     *rules = Rule::End;
+                    engine.render.objects_2d[1].2 = false;
+                    engine.render.objects_2d[2].2 = false;
                 }
 
-//                 if engine.events.key_pressed(KeyCode::Key1) {
-//                     *rules = Rule::Play(1);
-//                     // moved_highlight.verts[]
-//                     engine
-//                         .render
-//                         .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
-//                     engine.render.objects_2d[2].2 = false;
-//                 }
-//                 if engine.events.key_pressed(KeyCode::Key2) {
-//                     *rules = Rule::Play(2);
-//                 }
-//                 if engine.events.key_pressed(KeyCode::Key3) {
-//                     *rules = Rule::Play(3);
-//                 } // etc.
+                if engine.events.key_pressed(KeyCode::Key1) {
+                    *rules = Rule::Play(1);
+                    // moved_highlight.verts[]
+                    engine
+                        .render
+                        .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
+                    engine.render.objects_2d[2].2 = true;
+                } else if engine.events.key_pressed(KeyCode::Key2) {
+                    *rules = Rule::Play(2);
+                    moved_highlight.verts = [
+                        VertexTwoD {
+                            position: [-0.563, -0.551],
+                            tex_coords: [0.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.293, -0.551],
+                            tex_coords: [0.0, 1.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.563, -0.84],
+                            tex_coords: [1.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.293, -0.84],
+                            tex_coords: [1.0, 1.0],
+                        },
+                    ];
+                    engine
+                        .render
+                        .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
+                    engine.render.objects_2d[2].2 = true;
+                } else if engine.events.key_pressed(KeyCode::Key3) {
+                    *rules = Rule::Play(3);
+                    moved_highlight.verts = [
+                        VertexTwoD {
+                            position: [-0.273, -0.551],
+                            tex_coords: [0.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.004, -0.551],
+                            tex_coords: [0.0, 1.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.273, -0.84],
+                            tex_coords: [1.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [-0.004, -0.84],
+                            tex_coords: [1.0, 1.0],
+                        },
+                    ];
+                    engine
+                        .render
+                        .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
+                    engine.render.objects_2d[2].2 = true;
+                } else if engine.events.key_pressed(KeyCode::Key4) {
+                    *rules = Rule::Play(4);
+                    moved_highlight.verts = [
+                        VertexTwoD {
+                            position: [0.016, -0.551],
+                            tex_coords: [0.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [0.286, -0.551],
+                            tex_coords: [0.0, 1.0],
+                        },
+                        VertexTwoD {
+                            position: [0.016, -0.84],
+                            tex_coords: [1.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [0.286, -0.84],
+                            tex_coords: [1.0, 1.0],
+                        },
+                    ];
+                    engine
+                        .render
+                        .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
+                    engine.render.objects_2d[2].2 = true;
+                } else if engine.events.key_pressed(KeyCode::Key5) {
+                    *rules = Rule::Play(5);
+                    moved_highlight.verts = [
+                        VertexTwoD {
+                            position: [0.308, -0.551],
+                            tex_coords: [0.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [0.578, -0.551],
+                            tex_coords: [0.0, 1.0],
+                        },
+                        VertexTwoD {
+                            position: [0.308, -0.84],
+                            tex_coords: [1.0, 0.0],
+                        },
+                        VertexTwoD {
+                            position: [0.578, -0.84],
+                            tex_coords: [1.0, 1.0],
+                        },
+                    ];
+                    engine
+                        .render
+                        .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
+                    engine.render.objects_2d[2].2 = true;
+                }
+                if engine.events.key_pressed(KeyCode::S) {
+                    engine3d::save::save(&engine.render.chunks);
+                }
 
                 // here is a good place to handle loading
                 // render title screen
                 // handle key press to go to play
-            }
-            Rule::Play(i) => {
                 // Change this with new camera code and stuff
                 // engine.camera_controller.update_camera(&mut engine.render.camera);
                 // render hot bar and stuff? change assets unclear
-                engine.render.input(&engine.events, *i);
-                engine.render.update();
-
             }
             Rule::End => {
-                // render end screen
-                // handle key press to panic
+                engine.render.objects_2d[3].2 = true;
+                if engine.events.key_pressed(KeyCode::Q) {
+                    panic!();
+                }
+                if engine.events.key_pressed(KeyCode::S) {
+                    engine3d::save::save(&engine.render.chunks);
+                }
             }
         }
     }
     fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {
         match rules {
-            Rule::Title => {
-            }
-            Rule::Play(i) => {
-            }
-            Rule::End => {
-            }
+            Rule::Title => {}
+            Rule::Play(i) => {}
+            Rule::End => {}
         }
     }
 }
