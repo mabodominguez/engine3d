@@ -129,7 +129,7 @@ pub struct Render {
     render_pipeline: wgpu::RenderPipeline,
     voxel_model: Model,
     pub(crate) texture_layout: wgpu::BindGroupLayout,
-    pub(crate) camera: Camera,
+    pub camera: Camera,
     pub camera_controller: CameraController,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
@@ -211,7 +211,7 @@ impl Render {
             });
 
         let camera = Camera {
-            eye: (0.0, 0.0, 0.0).into(),
+            eye: (10.0, 330.0, 10.0).into(),
             target: (1.0, 1.0, 1.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: sc_desc.width as f32 / sc_desc.height as f32,
@@ -512,17 +512,17 @@ impl Render {
         }
     }
 
-    pub fn input(&mut self, event: &Events, selected_block: u8) -> bool {
+    pub fn input(&mut self, events: &Events, selected_block: u8) -> bool {
         //TODO shift plane
-        self.camera_controller.process_events(event);
+        self.camera_controller.process_events(events);
         let new_index = world_to_chunk(self.camera.eye).0 as isize;
         if self.current_chunk != new_index {
             self.current_chunk = new_index;
             self.change_render();
         }
-        if event.mouse_pressed(0) {
+        if events.mouse_pressed(0) {
             self.left_click();
-        } else if event.mouse_pressed(1) {
+        } else if events.mouse_pressed(1) {
             self.right_click(selected_block);
         }
         true

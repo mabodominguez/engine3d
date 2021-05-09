@@ -4,6 +4,10 @@ pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
+pub fn dist_3d(p1: Pos3, p2: Pos3) -> f32{
+    return ((p1.x - p2.x).powf(2.0) + (p1.y - p2.y).powf(2.0) + (p1.z - p2.z).powf(2.0)).powf(0.5);
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Sphere {
     pub c: Pos3,

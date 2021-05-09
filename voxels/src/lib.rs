@@ -13,7 +13,9 @@ pub mod gamestate;
 pub mod geom;
 pub mod model;
 pub mod texture;
+pub mod coordinates;
 pub mod voxel;
+pub mod player;
 pub mod collision;
 pub mod particle;
 pub mod instance_raw;
@@ -22,7 +24,6 @@ pub mod render;
 use render::Render;
 pub mod assets;
 pub mod world_gen;
-pub mod coordinates;
 pub mod save;
 
 use assets::{Asset2d, Assets, Object2d};

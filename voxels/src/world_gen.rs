@@ -102,7 +102,7 @@ fn make_top_layer(
         }
     }
 
-    return Chunk { data };
+    return Chunk { data, voxels:vec![] };
 }
 
 
@@ -116,7 +116,7 @@ fn make_air_layer() -> Chunk{
             }
         }
     }
-    Chunk { data}
+    Chunk { data, voxels:vec![]}
 }
 
 
@@ -148,7 +148,7 @@ fn make_mid_layer(
             }
         }
     }
-    Chunk { data }
+    Chunk { data , voxels:vec![]}
 }
 
 
@@ -185,7 +185,7 @@ fn make_bottom_layer(
             }
         }
     }
-    Chunk { data }
+    Chunk { data , voxels:vec![]}
 }
 
 // ROCK -> 3

@@ -30,7 +30,7 @@ pub fn load() -> Vec<Chunk> {
         let z = i % CHUNK_SIZE;
         data[x][y][z] = buffer[i];
         if (i + 1) % CHUNK_SIZE.pow(3) == 0 {
-            chunks.push(Chunk { data });
+            chunks.push(Chunk { data , voxels:vec![]});
         }
     }
     println!("succesful load");

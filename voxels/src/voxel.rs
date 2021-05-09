@@ -1,4 +1,5 @@
-
+use crate::geom::*;
+use crate::coordinates::*;
 pub const VOXEL_HALFWIDTH: f32 = 2.0; // Size of a voxel (halfwidth)
 pub const CHUNK_SIZE: usize = 16; // Size of lenght, width, and height of a chunk
 
@@ -6,6 +7,31 @@ pub const CHUNK_SIZE: usize = 16; // Size of lenght, width, and height of a chun
 pub struct Chunk {
     // Array that holds the vector info. It dimensions are CHUNK_SIZE^3
     pub data: [[[u8; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+    pub voxels: Vec<BBox>,
+}
+
+impl Chunk {
+    pub fn create_bboxes(&mut self, i:usize) {
+        let (x,y,z) = index_to_world(i);
+        let voxel_width = 2.0 * VOXEL_HALFWIDTH;
+        for i in 0..CHUNK_SIZE {
+            for j in 0..CHUNK_SIZE {
+                for k in 0..CHUNK_SIZE {
+                    let voxel_x = (x  + CHUNK_SIZE * i) as f32  + VOXEL_HALFWIDTH;
+                    let voxel_y = (y  + CHUNK_SIZE * j) as f32 + VOXEL_HALFWIDTH;
+                    let voxel_z = (z  + CHUNK_SIZE * k) as f32 + VOXEL_HALFWIDTH;
+                    let voxel_pos = Pos3{x:voxel_x, y:voxel_y, z:voxel_z};
+                    self.voxels.push(BBox{center:voxel_pos, halfwidth:VOXEL_HALFWIDTH});
+                }
+            }
+        }
+    }
+    pub fn bboxes_generated(&self) -> bool {
+        return self.voxels.len() > 0;
+    }
+    pub fn data_at(&self, v:usize) -> u8 {
+        return self.data[v / (CHUNK_SIZE * CHUNK_SIZE)][(v % (CHUNK_SIZE * CHUNK_SIZE)) / (CHUNK_SIZE)][v % CHUNK_SIZE];
+    }
 }
 
 #[repr(C)]

@@ -3,8 +3,14 @@ use engine3d::camera::*;
 use engine3d::events::*;
 use engine3d::model::*;
 use engine3d::render::TwoDID;
-use engine3d::voxel::Chunk;
+use engine3d::voxel::{Chunk, VOXEL_HALFWIDTH, CHUNK_SIZE};
+use engine3d::player::Player;
+use engine3d::geom::{BBox, dist_3d};
 use engine3d::{Engine, Game};
+use engine3d::collision::*;
+use engine3d::coordinates::*;
+use engine3d::particle::Particle;
+use engine3d::world_gen::{WORLD_MAX};
 pub type Pos3 = cgmath::Point3<f32>;
 pub type Pos2 = cgmath::Point2<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
@@ -15,6 +21,9 @@ pub struct Game1 {
     chunks: Vec<Chunk>,
     twods: Vec<TwoDID>,
     rule: Rule,
+    player: Player,
+    contacts: Contacts,
+    particles: Vec<Particle>,
 }
 #[derive(Debug)]
 pub enum Rule {
@@ -27,13 +36,16 @@ impl Game for Game1 {
     fn start(engine: &mut Engine) -> (Self, Self::StaticData) {
         let mut game = Game1 {
             camera_pos: Pos3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
+                x: 10.0,
+                y: 90.0,
+                z: 90.0,
             },
             chunks: vec![],
             rule: Rule::Title,
             twods: vec![],
+            player: Player::new(BBox{center:Pos3{x:10.0, y:350.0, z:10.0}, halfwidth:VOXEL_HALFWIDTH}),
+            contacts: Contacts::new(),
+            particles: vec![],
         };
         let bind_groups = vec![
             engine3d::assets::Asset2d(
@@ -48,12 +60,12 @@ impl Game for Game1 {
                     .join("hotbar.png"),
                 "hotbar".to_string(),
             ),
-            engine3d::assets::Asset2d(
+            /*engine3d::assets::Asset2d(
                 std::path::Path::new(env!("OUT_DIR"))
                     .join("content")
                     .join("hotbar_highlight.png"),
                 "hotbar_highlight".to_string(),
-            ),
+            ),*/
             engine3d::assets::Asset2d(
                 std::path::Path::new(env!("OUT_DIR"))
                     .join("content")
@@ -157,7 +169,6 @@ impl Game for Game1 {
         return (game, Rule::Title);
     }
     fn update(&mut self, rules: &mut Self::StaticData, engine: &mut Engine) {
-        // println!("{:?}", rules);
         match rules {
             Rule::Title => {
                 if engine.events.key_pressed(KeyCode::L) {
@@ -174,7 +185,31 @@ impl Game for Game1 {
                 }
             }
             Rule::Play(i) => {
+                self.player.process_events(&engine.events);
                 engine.render.input(&engine.events, *i);
+                //collision option 1
+                let (mut chunk_index, _) = world_to_chunk(self.player.hitbox.center);
+                if engine.render.chunks.len() == 0 {
+                    chunk_index = 0;
+                } else {
+                    chunk_index = chunk_index.clamp(0, engine.render.chunks.len()-1);
+                    let chunk = &mut engine.render.chunks[chunk_index];
+                    if !chunk.bboxes_generated(){chunk.create_bboxes(chunk_index);println!("generated {}", chunk_index);}
+                    update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
+                    self.player.process_contacts(&self.contacts.block_player);
+                }
+                //collision option 2
+                // for c in 0..engine.render.chunks.len() {
+                //     let chunk_pos = index_to_world(c);
+                //     let chunk_posf = Pos3{x:chunk_pos.0 as f32, y:chunk_pos.1 as f32, z:chunk_pos.2 as f32};
+                //     if dist_3d(self.player.hitbox.center, chunk_posf) <= (CHUNK_SIZE * 6) as f32 * VOXEL_HALFWIDTH {
+                //         let chunk = &mut engine.render.chunks[c];
+                //         if !chunk.bboxes_generated(){chunk.create_bboxes(c);println!("generated {}", c);}
+                //         update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
+                //         self.player.process_contacts(&self.contacts.block_player);
+                //     }
+                // }
+                self.player.update(&mut engine.render.camera);
                 engine.render.update();
                 // Change this with new camera code and stuff
                 // render gameplay relevent stuff
@@ -314,7 +349,7 @@ impl Game for Game1 {
                         .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
                     engine.render.objects_2d[2].2 = true;
                 }
-                if engine.events.key_pressed(KeyCode::S) {
+                if engine.events.key_pressed(KeyCode::T) {
                     engine3d::save::save(&engine.render.chunks);
                 }
 
