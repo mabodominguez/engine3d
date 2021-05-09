@@ -60,12 +60,12 @@ impl Game for Game1 {
                     .join("hotbar.png"),
                 "hotbar".to_string(),
             ),
-            /*engine3d::assets::Asset2d(
+            engine3d::assets::Asset2d(
                 std::path::Path::new(env!("OUT_DIR"))
                     .join("content")
                     .join("hotbar_highlight.png"),
                 "hotbar_highlight".to_string(),
-            ),*/
+            ),
             engine3d::assets::Asset2d(
                 std::path::Path::new(env!("OUT_DIR"))
                     .join("content")
