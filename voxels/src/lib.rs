@@ -14,10 +14,16 @@ pub mod geom;
 pub mod model;
 pub mod texture;
 pub mod voxel;
+pub mod collision;
+pub mod particle;
+pub mod instance_raw;
 use events::Events;
 pub mod render;
 use render::Render;
 pub mod assets;
+pub mod world_gen;
+pub mod coordinates;
+pub mod save;
 
 use assets::{Asset2d, Assets, Object2d};
 
@@ -80,6 +86,8 @@ pub fn run<R, G: Game<StaticData = R>>(
     use std::time::Instant;
     let mut event_loop = EventLoop::new();
     let window = window_builder.build(&event_loop).unwrap();
+    let _window_grab = window.set_cursor_grab(true);
+    window.set_cursor_icon(winit::window::CursorIcon::Crosshair);
     let assets = Assets::new(asset_root);
     use futures::executor::block_on;
     let render = block_on(Render::new(&window));
@@ -135,6 +143,7 @@ pub fn run<R, G: Game<StaticData = R>>(
                     // All other errors (Outdated, Timeout) should be resolved by the next frame
                     Err(e) => eprintln!("{:?}", e),
                 }
+                
                 // The renderer "produces" time...
                 available_time += since.elapsed().as_secs_f32();
                 since = Instant::now();
@@ -145,7 +154,9 @@ pub fn run<R, G: Game<StaticData = R>>(
         while available_time >= DT {
             // Eat up one frame worth of time
             available_time -= DT;
+
             game.update(&mut rules, &mut engine);
+            let _window_set_cursor = window.set_cursor_position(winit::dpi::PhysicalPosition::new(engine.render.camera_controller.center_x, engine.render.camera_controller.center_y));
             engine.events.next_frame();
             engine.frame += 1;
             // Increment the frame counter

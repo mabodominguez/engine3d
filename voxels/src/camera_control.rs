@@ -1,6 +1,7 @@
 use crate::camera::Camera;
 use crate::geom::*;
 use winit::event::*;
+use crate::Events;
 use std::f32::consts::PI;
 
 pub struct CameraController {
@@ -34,72 +35,40 @@ impl CameraController {
         }
     }
 
-    pub fn process_events(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::CursorMoved {
-                device_id,
-                position,
-                modifiers, // shift, alt, etc?
-            } => {
-                self.offset_x = position.x as i32 - self.center_x;
-                self.offset_y = position.y as i32 - self.center_y;
-                true
-            },
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state,
-                        virtual_keycode: Some(keycode),
-                        ..
-                    },
-                ..
-            } => {
-                let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    VirtualKeyCode::Up => {
-                        self.is_forward_pressed = is_pressed;
-                        true
-                    }
-                    VirtualKeyCode::Left => {
-                        self.is_left_pressed = is_pressed;
-                        true
-                    }
-                    VirtualKeyCode::Down => {
-                        self.is_backward_pressed = is_pressed;
-                        true
-                    }
-                    VirtualKeyCode::Right => {
-                        self.is_right_pressed = is_pressed;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
+    pub fn process_events(&mut self, events: &Events) -> bool {
+        //mouse movement
+        self.offset_x = events.mouse_delta().0 as i32;
+        self.offset_y = events.mouse_delta().1 as i32;
+        //key presses
+        self.is_forward_pressed = events.key_held(VirtualKeyCode::W);
+        self.is_left_pressed = events.key_held(VirtualKeyCode::A);
+        self.is_backward_pressed = events.key_held(VirtualKeyCode::S);
+        self.is_right_pressed = events.key_held(VirtualKeyCode::D);
+
+        true
     }
 
     pub fn update_camera(&mut self, camera: &mut Camera) {
-        let mut forward = camera.target - camera.eye;
+        let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
 
         // Prevents glitching when camera gets too close to the
         // center of the scene.
         if self.is_forward_pressed && forward_mag > self.speed {
-            // camera.eye += forward_norm * self.speed;
-            // camera.target += forward_norm * self.speed;
+             camera.eye += forward_norm * self.speed;
+             camera.target += forward_norm * self.speed;
         }
         if self.is_backward_pressed {
-            // camera.eye -= forward_norm * self.speed;
-            // camera.target -= forward_norm * self.speed;
+             camera.eye -= forward_norm * self.speed;
+             camera.target -= forward_norm * self.speed;
         }
 
-        let right = forward_norm.cross(camera.up);
+        // let right = forward_norm.cross(camera.up);
 
         // Redo radius calc in case the up/ down is pressed.
         let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
+        // let forward_mag = forward.magnitude();
 
         if self.is_right_pressed {
             // Rescale the distance between the target and eye so

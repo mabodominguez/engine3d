@@ -118,7 +118,11 @@ impl Events {
     }
 
     pub fn mouse_pressed(&self, button: usize) -> bool {
-        self.mouse_buttons[button] == Some(0)
+        if button < self.mouse_buttons.len(){
+            self.mouse_buttons[button] == Some(0)
+        } else {
+            false
+        }
     }
 
     pub fn mouse_held(&self, button: usize) -> bool {

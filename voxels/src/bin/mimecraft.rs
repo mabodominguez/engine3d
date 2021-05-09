@@ -19,7 +19,7 @@ pub struct Game1 {
 #[derive(Debug)]
 pub enum Rule {
     Title,
-    Play(usize), // what part of the inventory
+    Play(u8), // what part of the inventory
     End,
 }
 impl Game for Game1 {
@@ -155,6 +155,7 @@ impl Game for Game1 {
         engine.render.set_2d_bind_groups(&bind_groups);
         game.twods = engine.render.set_2d_buffers(&objects_2d);
         return (game, Rule::Title);
+
     }
     fn update(&mut self, rules: &mut Self::StaticData, engine: &mut Engine) {
         println!("{:?}", rules);
@@ -205,20 +206,33 @@ impl Game for Game1 {
                 if engine.events.key_pressed(KeyCode::Escape) {
                     *rules = Rule::End;
                 }
-                if engine.events.key_pressed(KeyCode::Key1) {
-                    *rules = Rule::Play(1);
-                    // moved_highlight.verts[]
-                    engine
-                        .render
-                        .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
-                    engine.render.objects_2d[2].2 = false;
-                }
-                if engine.events.key_pressed(KeyCode::Key2) {
-                    *rules = Rule::Play(2);
-                }
-                if engine.events.key_pressed(KeyCode::Key3) {
-                    *rules = Rule::Play(3);
-                } // etc.
+
+//                 if engine.events.key_pressed(KeyCode::Key1) {
+//                     *rules = Rule::Play(1);
+//                     // moved_highlight.verts[]
+//                     engine
+//                         .render
+//                         .update_2d_buffer(&moved_highlight, engine.render.objects_2d[2]);
+//                     engine.render.objects_2d[2].2 = false;
+//                 }
+//                 if engine.events.key_pressed(KeyCode::Key2) {
+//                     *rules = Rule::Play(2);
+//                 }
+//                 if engine.events.key_pressed(KeyCode::Key3) {
+//                     *rules = Rule::Play(3);
+//                 } // etc.
+
+                // here is a good place to handle loading
+                // render title screen
+                // handle key press to go to play
+            }
+            Rule::Play(i) => {
+                // Change this with new camera code and stuff
+                // engine.camera_controller.update_camera(&mut engine.render.camera);
+                // render hot bar and stuff? change assets unclear
+                engine.render.input(&engine.events, *i);
+                engine.render.update();
+
             }
             Rule::End => {
                 // render end screen
@@ -226,7 +240,16 @@ impl Game for Game1 {
             }
         }
     }
-    fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {}
+    fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {
+        match rules {
+            Rule::Title => {
+            }
+            Rule::Play(i) => {
+            }
+            Rule::End => {
+            }
+        }
+    }
 }
 
 fn main() {
