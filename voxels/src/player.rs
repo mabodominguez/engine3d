@@ -38,7 +38,7 @@ impl Player {
             vy: 0.0,
             vz: 0.0,
             facing_direction: cgmath::vec3(0.0, 0.0, 0.0),
-            speed: 1.0,
+            speed: 0.3,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
@@ -108,8 +108,8 @@ impl Player {
         
         if (!self.y_neg_blocked) {
                 self.vy -= 0.005;
-            if (self.vy <= -0.1) { //terminal velocity
-                self.vy = -0.1;
+            if (self.vy <= -0.2) { //terminal velocity
+                self.vy = -0.2;
             }
         } else {
             self.vy = 0.0;

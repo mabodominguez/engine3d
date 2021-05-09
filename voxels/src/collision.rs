@@ -40,16 +40,17 @@ fn restitute(chunk: &mut Chunk, player: &mut BBox, particles: &mut [Particle], c
             let x = c.mtv.x;
             let y = c.mtv.y;
             let z = c.mtv.z;
+            let restitute_factor = 1.0;
             if y <= x && y <= z {
-                player.center.y += y / 2.0;
+                player.center.y += y * restitute_factor;
                 c.mtv.x = 0.0;
                 c.mtv.z = 0.0;
             } else if x <= y && x <= z {
-                player.center.x += x / 2.0;
+                player.center.x += x * restitute_factor;
                 c.mtv.y = 0.0;
                 c.mtv.z = 0.0;
             } else {
-                player.center.z += z / 2.0;
+                player.center.z += z * restitute_factor;
                 c.mtv.x = 0.0;
                 c.mtv.y = 0.0;
             }
@@ -72,7 +73,6 @@ fn gather_contacts1(chunk: &mut Chunk, player: &mut BBox, into: &mut Contacts) {
     for (ai, a) in chunk.voxels.iter().enumerate() {
         if chunk.data_at(ai) != 0 {
             if let Some(disp) = disp_box_box(a, player) {
-                println!("contact");
                 into.block_player.push(Contact {
                     a: ai,
                     b: 0,

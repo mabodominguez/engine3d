@@ -188,27 +188,28 @@ impl Game for Game1 {
                 self.player.process_events(&engine.events);
                 engine.render.input(&engine.events, *i);
                 //collision option 1
-                let (mut chunk_index, _) = world_to_chunk(self.player.hitbox.center);
-                if engine.render.chunks.len() == 0 {
-                    chunk_index = 0;
-                } else {
-                    chunk_index = chunk_index.clamp(0, engine.render.chunks.len()-1);
-                    let chunk = &mut engine.render.chunks[chunk_index];
-                    if !chunk.bboxes_generated(){chunk.create_bboxes(chunk_index);println!("generated {}", chunk_index);}
-                    update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
-                    self.player.process_contacts(&self.contacts.block_player);
-                }
-                //collision option 2
-                // for c in 0..engine.render.chunks.len() {
-                //     let chunk_pos = index_to_world(c);
-                //     let chunk_posf = Pos3{x:chunk_pos.0 as f32, y:chunk_pos.1 as f32, z:chunk_pos.2 as f32};
-                //     if dist_3d(self.player.hitbox.center, chunk_posf) <= (CHUNK_SIZE * 6) as f32 * VOXEL_HALFWIDTH {
-                //         let chunk = &mut engine.render.chunks[c];
-                //         if !chunk.bboxes_generated(){chunk.create_bboxes(c);println!("generated {}", c);}
-                //         update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
-                //         self.player.process_contacts(&self.contacts.block_player);
-                //     }
+                // let (mut chunk_index, _) = world_to_chunk(self.player.hitbox.center);
+                // if engine.render.chunks.len() == 0 {
+                //     chunk_index = 0;
+                // } else {
+                //     chunk_index = chunk_index.clamp(0, engine.render.chunks.len()-1);
+                //     let chunk = &mut engine.render.chunks[chunk_index];
+                //     if !chunk.bboxes_generated(){chunk.create_bboxes(chunk_index);println!("generated {}", chunk_index);}
+                //     update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
+                //     self.player.process_contacts(&self.contacts.block_player);
                 // }
+                //collision option 2
+                for c in 0..engine.render.chunks.len() {
+                    let chunk_pos = index_to_world(c);
+                    let chunk_scale = CHUNK_SIZE as f32 * 2.0 * VOXEL_HALFWIDTH;
+                    let chunk_posf = Pos3{x:chunk_pos.0 as f32 * chunk_scale, y:chunk_pos.1 as f32 * chunk_scale, z:chunk_pos.2 as f32 * chunk_scale};
+                    if dist_3d(self.player.hitbox.center, chunk_posf) <= chunk_scale * 3.0 {
+                        let chunk = &mut engine.render.chunks[c];
+                        if !chunk.bboxes_generated(){chunk.create_bboxes(c);println!("generated {}", c);}
+                        update(chunk, &mut self.player.hitbox, &mut self.particles, &mut self.contacts);
+                        self.player.process_contacts(&self.contacts.block_player);
+                    }
+                }
                 self.player.update(&mut engine.render.camera);
                 engine.render.update();
                 // Change this with new camera code and stuff
