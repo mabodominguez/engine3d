@@ -336,13 +336,7 @@ impl Game for Game1 {
             }
         }
     }
-    fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {
-        match rules {
-            Rule::Title => {}
-            Rule::Play(i) => {}
-            Rule::End => {}
-        }
-    }
+    fn render(&mut self, rules: &Self::StaticData, assets: &Assets) {}
 }
 
 fn main() {
